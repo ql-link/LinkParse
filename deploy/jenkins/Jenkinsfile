@@ -1,0 +1,105 @@
+pipeline {
+  agent any
+
+  options {
+    timestamps()
+    disableConcurrentBuilds()
+    buildDiscarder(logRotator(numToKeepStr: '20'))
+  }
+
+  parameters {
+    booleanParam(
+      name: 'RUN_TESTS',
+      defaultValue: true,
+      description: '在 Primary 构建测试阶段并运行 pytest'
+    )
+  }
+
+  triggers {
+    GenericTrigger(
+      genericVariables: [[key: 'ref', value: '$.ref']],
+      causeString: 'GitHub push to $ref',
+      token: '',
+      tokenCredentialId: 'linkcv-dev-webhook-token',
+      printContributedVariables: false,
+      printPostContent: false,
+      silentResponse: false,
+      shouldNotFlatten: false,
+      regexpFilterText: '$ref',
+      regexpFilterExpression: '^refs/heads/main$'
+    )
+  }
+
+  environment {
+    PRIMARY_HOST = '100.86.10.52'
+    PRIMARY_USER = 'root'
+    PRIMARY_SSH_KEY = '/var/jenkins_home/.ssh/primary_dev'
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+        script {
+          env.COMMIT_SHORT = sh(
+            script: 'git rev-parse --short=8 HEAD',
+            returnStdout: true
+          ).trim()
+        }
+      }
+    }
+
+    stage('Package Commit') {
+      steps {
+        sh '''
+          set -eu
+          git archive --format=tar.gz --output=linkparse-source.tar.gz HEAD
+        '''
+      }
+    }
+
+    stage('Test and Deploy on Primary') {
+      steps {
+        sh '''
+          set -eu
+          case "${BUILD_NUMBER}" in
+            ''|*[!0-9]*) echo 'BUILD_NUMBER must be numeric'; exit 20 ;;
+          esac
+          test -f "${PRIMARY_SSH_KEY}" || {
+            echo "Missing Primary SSH key: ${PRIMARY_SSH_KEY}"
+            exit 21
+          }
+
+          remote_dir="/tmp/linkparse-jenkins-${BUILD_NUMBER}"
+          ssh_opts="-i ${PRIMARY_SSH_KEY} -o BatchMode=yes -o StrictHostKeyChecking=accept-new"
+          ssh ${ssh_opts} "${PRIMARY_USER}@${PRIMARY_HOST}" \
+            "mkdir -p '${remote_dir}'"
+          scp ${ssh_opts} \
+            linkparse-source.tar.gz \
+            deploy/scripts/deploy-on-primary.sh \
+            "${PRIMARY_USER}@${PRIMARY_HOST}:${remote_dir}/"
+          ssh ${ssh_opts} "${PRIMARY_USER}@${PRIMARY_HOST}" \
+            "bash '${remote_dir}/deploy-on-primary.sh' '${BUILD_NUMBER}' '${COMMIT_SHORT}' '${remote_dir}/linkparse-source.tar.gz' '${RUN_TESTS}'"
+        '''
+      }
+    }
+  }
+
+  post {
+    always {
+      sh '''
+        case "${BUILD_NUMBER}" in
+          ''|*[!0-9]*) exit 0 ;;
+        esac
+        ssh -i "${PRIMARY_SSH_KEY}" \
+          -o BatchMode=yes \
+          -o StrictHostKeyChecking=accept-new \
+          "${PRIMARY_USER}@${PRIMARY_HOST}" \
+          "rm -rf '/tmp/linkparse-jenkins-${BUILD_NUMBER}'" || true
+        rm -f linkparse-source.tar.gz
+      '''
+    }
+    success { echo "linkparse deployed from commit ${env.COMMIT_SHORT}" }
+    failure { echo 'LinkParse test, build, or deployment failed.' }
+  }
+}

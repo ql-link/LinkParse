@@ -1,0 +1,57 @@
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "${LINKPARSE_BIND_ADDRESS:-127.0.0.1}:${LINKPARSE_PORT:-8080}:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro,Z
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    cpus: 0.25
+    mem_limit: 128m
+
+  api:
+    image: ${LINKPARSE_IMAGE:-linkparse:local}
+    build: .
+    env_file: .env
+    environment:
+      OMP_NUM_THREADS: "${LINKPARSE_ORT_INTRA_OP_NUM_THREADS:-3}"
+      MKL_NUM_THREADS: "${LINKPARSE_ORT_INTRA_OP_NUM_THREADS:-3}"
+      OPENBLAS_NUM_THREADS: "${LINKPARSE_ORT_INTRA_OP_NUM_THREADS:-3}"
+    volumes:
+      - ${LINKPARSE_HOST_DATA_DIR:-./data}:/app/data:z
+    networks:
+      - default
+      - shared
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    cpus: 3.0
+    mem_limit: 4g
+
+  worker:
+    image: ${LINKPARSE_IMAGE:-linkparse:local}
+    command: celery -A app.workers.celery_app:celery_app worker --loglevel=info --concurrency=1
+    env_file: .env
+    environment:
+      OMP_NUM_THREADS: "${LINKPARSE_ORT_INTRA_OP_NUM_THREADS:-3}"
+      MKL_NUM_THREADS: "${LINKPARSE_ORT_INTRA_OP_NUM_THREADS:-3}"
+      OPENBLAS_NUM_THREADS: "${LINKPARSE_ORT_INTRA_OP_NUM_THREADS:-3}"
+    volumes:
+      - ${LINKPARSE_HOST_DATA_DIR:-./data}:/app/data:z
+    networks:
+      - default
+      - shared
+    restart: unless-stopped
+    cpus: 3.0
+    mem_limit: 6g
+
+networks:
+  shared:
+    external: true
+    name: ${LINKPARSE_SHARED_NETWORK:-link_tolink-net}

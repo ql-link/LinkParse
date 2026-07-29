@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="LinkParse API 完整接入、参数与响应参考">
+    <title>LinkParse API · 接入文档</title>
+    <link rel="stylesheet" href="/assets/docs.css">
+  </head>
+  <body>
+    <header class="docs-bar">
+      <a class="docs-brand fluid-press" href="/" aria-label="返回 LinkParse 控制台"><span class="brand-symbol">LP</span><span><strong>LinkParse</strong><small>Developer API · v0.2.0</small></span></a>
+      <div class="docs-actions"><span class="live-status" id="docs-status"><i></i><span>检查服务</span></span><a class="quiet-button fluid-press" href="/openapi.json">OpenAPI</a><a class="solid-button fluid-press" href="/">控制台</a></div>
+    </header>
+
+    <div class="docs-layout">
+      <aside class="docs-sidebar" aria-label="文档导航">
+        <div class="side-context"><span>BASE URL</span><code id="base-url">—</code><button class="copy-base fluid-press" type="button" data-copy-text="origin">复制地址</button></div>
+        <nav>
+          <span>开始</span><a class="active" href="#overview">API 概览</a><a href="#quickstart">快速开始</a><a href="#conventions">通用约定</a>
+          <span>解析规则</span><a href="#formats">返回格式</a><a href="#auto-engine">Auto 引擎</a>
+          <span>公开接口</span><a href="#health">健康检查</a><a href="#info">服务信息</a>
+          <span>解析接口</span><a href="#parse">同步解析</a><a href="#create-job">创建异步任务</a><a href="#job-status">查询任务状态</a><a href="#job-result">获取任务结果</a>
+          <span>管理接口</span><a href="#admin-config">运行配置</a><a href="#errors">错误处理</a>
+        </nav>
+      </aside>
+
+      <main class="docs-main">
+        <section class="docs-hero doc-section" id="overview">
+          <div class="hero-status"><span>REST API</span><span>HTTP + JSON</span><span>v0.2.0</span></div>
+          <h1>LinkParse API</h1>
+          <p class="hero-subtitle">完整接口参考</p>
+          <p class="lede">上传 PDF 或图片，服务自动选择 OpenDataLoader 或 RapidOCR，返回 Text、JSON、Markdown、HTML。本文档覆盖当前全部接口、字段定义和可直接复制的出入参示例。</p>
+          <div class="api-summary-grid">
+            <div><span>输入格式</span><strong>PDF / PNG / JPEG / WebP / TIFF</strong></div>
+            <div><span>认证方式</span><strong>Bearer API Key</strong></div>
+            <div><span>同步接口</span><strong>POST /v1/parse</strong></div>
+            <div><span>异步接口</span><strong>POST /v1/jobs</strong></div>
+          </div>
+        </section>
+
+        <section class="doc-section" id="quickstart">
+          <div class="section-heading"><p class="section-kicker">QUICK START</p><h2>第一次同步解析</h2><p>下面的请求使用自动引擎，上传一个 PDF，同时返回 Markdown 和结构化 JSON。</p></div>
+          <div class="example-pair">
+            <div class="code-window"><div class="code-toolbar"><span><b></b>请求 · cURL</span><button class="copy-code fluid-press" data-copy="quick-request">复制</button></div><pre id="quick-request"><code>curl -X POST <span class="origin-token"></span>/v1/parse \
+  -H "Authorization: Bearer &lt;API_KEY&gt;" \
+  -H "X-Request-ID: demo-request-001" \
+  -F "file=@document.pdf" \
+  -F "engine=auto" \
+  -F "output_formats=markdown,json" \
+  -F "ocr=auto"</code></pre></div>
+            <div class="code-window"><div class="code-toolbar"><span><b></b>响应 · HTTP 200</span><button class="copy-code fluid-press" data-copy="quick-response">复制</button></div><pre id="quick-response"><code>{
+  "request_id": "demo-request-001",
+  "filename": "document.pdf",
+  "engine": "opendataloader",
+  "detected_type": "text_pdf",
+  "outputs": {
+    "markdown": "# 项目方案\n\n正文内容……",
+    "json": { "pages": [] }
+  },
+  "meta": { "page_count": 3, "duration_ms": 842 }
+}</code></pre></div>
+          </div>
+        </section>
+
+        <section class="doc-section" id="conventions">
+          <div class="section-heading"><p class="section-kicker">CONVENTIONS</p><h2>通用请求约定</h2><p>所有接口使用当前站点作为 Base URL。解析接口上传文件，管理接口提交 JSON，响应最外层始终为 JSON。</p></div>
+          <div class="convention-grid">
+            <article><span>认证</span><strong>Authorization</strong><code>Bearer &lt;API_KEY&gt;</code><p>除 <code>/health</code> 和 <code>/v1/info</code> 外均必填。</p></article>
+            <article><span>请求追踪</span><strong>X-Request-ID</strong><code>demo-request-001</code><p>可选，允许字母、数字及 <code>._:-</code>，最长 128 字符；响应头会原样返回。</p></article>
+            <article><span>文件上传</span><strong>Content-Type</strong><code>multipart/form-data</code><p>由 HTTP 客户端自动生成 boundary，不要手工固定该请求头。</p></article>
+            <article><span>JSON 配置</span><strong>Content-Type</strong><code>application/json</code><p>仅 <code>PUT /v1/admin/config</code> 使用。</p></article>
+          </div>
+          <div class="limit-strip"><div><span>默认文件上限</span><strong>50 MB</strong></div><div><span>默认 PDF 页数</span><strong>50 页</strong></div><div><span>默认 OCR DPI</span><strong>200</strong></div><div><span>最大 OCR DPI</span><strong>300</strong></div><div><span>默认结果保留</span><strong>24 小时</strong></div></div>
+          <div class="callout"><strong>安全提示</strong><p>API Key 不应放入 URL、前端源码或业务日志。生产调用建议主动传入唯一的 <code>X-Request-ID</code> 便于端到端排查。</p></div>
+        </section>
+
+        <section class="doc-section" id="formats">
+          <div class="section-heading"><p class="section-kicker">OUTPUT FORMATS</p><h2><code>output_formats</code> 返回格式</h2><p>参数值是逗号分隔字符串，可选择一种或多种格式。选择格式不会改变 HTTP Content-Type；结果始终放在 JSON 响应的 <code>outputs</code> 对象内。</p></div>
+          <div class="format-layout">
+            <div class="format-options" role="tablist" aria-label="返回格式示例">
+              <button class="format-tab active fluid-press" type="button" role="tab" aria-selected="true" data-format="markdown"><span>markdown</span><small>标题、段落等语义文本</small></button>
+              <button class="format-tab fluid-press" type="button" role="tab" aria-selected="false" data-format="json"><span>json</span><small>页面、文字块、坐标与置信度</small></button>
+              <button class="format-tab fluid-press" type="button" role="tab" aria-selected="false" data-format="text"><span>text</span><small>无标记的纯文本</small></button>
+              <button class="format-tab fluid-press" type="button" role="tab" aria-selected="false" data-format="html"><span>html</span><small>按页面组织的 HTML 片段</small></button>
+            </div>
+            <div class="format-preview"><div class="preview-meta"><span>响应字段</span><code id="format-path">outputs.markdown</code></div><pre><code id="format-example">{
+  "outputs": {
+    "markdown": "# 项目方案\n\n正文内容……"
+  }
+}</code></pre></div>
+          </div>
+          <div class="schema-table">
+            <div class="schema-head"><span>值</span><span>字段类型</span><span>说明</span></div>
+            <div><code>text</code><span>string</span><p>提取后的纯文本；OCR 页面之间使用空行分隔。</p></div>
+            <div><code>json</code><span>object</span><p>结构化结果。RapidOCR 返回 <code>pages[]</code>、页面尺寸、文本与 <code>blocks[]</code>。</p></div>
+            <div><code>markdown</code><span>string</span><p>Markdown 文本。OCR 路径会按 <code>## Page N</code> 分页。</p></div>
+            <div><code>html</code><span>string</span><p>HTML 片段。OCR 路径按 <code>&lt;section data-page&gt;</code> 组织。</p></div>
+          </div>
+        </section>
+
+        <section class="doc-section" id="auto-engine">
+          <div class="section-heading"><p class="section-kicker">AUTO ROUTING</p><h2><code>engine=auto</code> 的实际逻辑</h2><p><code>auto</code> 是自动路由策略，不是独立引擎。PDF 会先由 PyMuPDF 检测文本层，再选择 OpenDataLoader、RapidOCR 或组合解析。</p></div>
+          <div class="route-map">
+            <div class="route-row"><span>PNG / JPEG / WebP / TIFF</span><strong>RapidOCR</strong><p>图片必须执行 OCR；<code>ocr=never</code> 或显式选择 OpenDataLoader 会返回 422。</p></div>
+            <div class="route-row"><span>text_pdf</span><strong>OpenDataLoader</strong><p>所有页面文本长度均达到阈值，保留文档结构。</p></div>
+            <div class="route-row"><span>scanned_pdf</span><strong>RapidOCR</strong><p>所有页面均低于文本阈值，先按 DPI 渲染，再逐页 OCR。</p></div>
+            <div class="route-row featured"><span>mixed_pdf</span><strong>组合解析</strong><p>OpenDataLoader 处理结构，低文本页由 RapidOCR 补齐。</p></div>
+          </div>
+          <div class="auto-notes"><article><small>ocr=auto</small><p>按文档检测结果自动决定。</p></article><article><small>ocr=always</small><p>PDF 强制使用 RapidOCR。</p></article><article><small>ocr=never</small><p>PDF 强制使用 OpenDataLoader。</p></article><article><small>自动降级</small><p>自动模式下 OpenDataLoader 失败会降级到 RapidOCR。</p></article></div>
+        </section>
+
+        <section class="doc-section endpoint-section" id="health">
+          <div class="endpoint-head"><div><span class="method get">GET</span><code>/health</code></div><span class="auth-badge public">无需鉴权</span></div>
+          <div class="section-heading"><h2>健康检查</h2><p>用于负载均衡、容器探活和部署验收。<code>status=degraded</code> 表示至少一个解析组件不可用，但接口本身仍返回 HTTP 200。</p></div>
+          <div class="example-pair">
+            <div class="code-window"><div class="code-toolbar"><span><b></b>请求</span><button class="copy-code fluid-press" data-copy="health-request">复制</button></div><pre id="health-request"><code>curl <span class="origin-token"></span>/health</code></pre></div>
+            <div class="code-window"><div class="code-toolbar"><span><b></b>响应 · 200</span><button class="copy-code fluid-press" data-copy="health-response">复制</button></div><pre id="health-response"><code>{
+  "status": "ok",
+  "engines": {
+    "pymupdf": true,
+    "rapidocr": true,
+    "opendataloader": true
+  }
+}</code></pre></div>
+          </div>
+        </section>
+
+        <section class="doc-section endpoint-section" id="info">
+          <div class="endpoint-head"><div><span class="method get">GET</span><code>/v1/info</code></div><span class="auth-badge public">无需鉴权</span></div>
+          <div class="section-heading"><h2>服务能力与限制</h2><p>返回当前版本、支持的输入输出类型和已经生效的运行限制。客户端可在上传前使用这些值做校验。</p></div>
+          <div class="example-pair">
+            <div class="code-window"><div class="code-toolbar"><span><b></b>请求</span><button class="copy-code fluid-press" data-copy="info-request">复制</button></div><pre id="info-request"><code>curl <span class="origin-token"></span>/v1/info</code></pre></div>
+            <div class="code-window"><div class="code-toolbar"><span><b></b>响应 · 200</span><button class="copy-code fluid-press" data-copy="info-response">复制</button></div><pre id="info-response"><code>{
+  "name": "LinkParse",
+  "version": "0.2.0",
+  "description": "CPU-first document parsing...",
+  "input_types": ["PDF", "PNG", "JPEG", "WebP", "TIFF"],
+  "output_formats": ["text", "json", "markdown", "html"],
+  "limits": {
+    "max_upload_mb": 50,
+    "max_pdf_pages": 50,
+    "default_dpi": 200,
+    "max_dpi": 300,
+    "result_ttl_hours": 24
+  },
+  "endpoints": {
+    "sync": "/v1/parse",
+    "async": "/v1/jobs",
+    "health": "/health",
+    "openapi": "/docs"
+  }
+}</code></pre></div>
+          </div>
+        </section>
+
+        <section class="doc-section endpoint-section" id="parse">
+          <div class="endpoint-head"><div><span class="method post">POST</span><code>/v1/parse</code></div><span class="auth-badge">Bearer API Key</span></div>
+          <div class="section-heading"><h2>同步解析文档</h2><p>上传文件并等待解析完成，成功返回 <code>ParseResponse</code>。适合图片和短 PDF；长文档建议使用异步任务。</p></div>
+          <h3 class="subheading">请求参数 · multipart/form-data</h3>
+          <div class="param-table">
+            <div class="param-head"><span>字段</span><span>类型 / 默认值</span><span>说明与示例</span></div>
+            <div><code>file <em>必填</em></code><span>File</span><p>PDF、PNG、JPEG、WebP、TIFF。示例：<code>@resume.pdf</code>。</p></div>
+            <div><code>engine</code><span>enum · <b>auto</b></span><p><code>auto</code>、<code>opendataloader</code>、<code>rapidocr</code>。</p></div>
+            <div><code>output_formats</code><span>CSV string · <b>text,json</b></span><p><code>text,json,markdown,html</code> 的任意非空组合。</p></div>
+            <div><code>ocr</code><span>enum · <b>auto</b></span><p><code>auto</code>、<code>always</code>、<code>never</code>。</p></div>
+            <div><code>dpi</code><span>integer · <b>服务默认值</b></span><p>OCR 渲染 DPI，必须在 72 与当前 <code>max_dpi</code> 之间。</p></div>
+            <div><code>include_bbox</code><span>boolean · <b>true</b></span><p>是否在 OCR JSON 的每个文字块中返回 <code>bbox</code>；置信度始终返回。</p></div>
+          </div>
+          <div class="example-pair spaced">
+            <div class="code-window"><div class="code-toolbar"><span><b></b>请求 · cURL</span><button class="copy-code fluid-press" data-copy="parse-request">复制</button></div><pre id="parse-request"><code>curl -X POST <span class="origin-token"></span>/v1/parse \
+  -H "Authorization: Bearer &lt;API_KEY&gt;" \
+  -H "X-Request-ID: parse-scan-001" \
+  -F "file=@scan.pdf" \
+  -F "engine=auto" \
+  -F "output_formats=text,json,markdown" \
+  -F "ocr=auto" \
+  -F "dpi=200" \
+  -F "include_bbox=true"</code></pre></div>
+            <div class="code-window"><div class="code-toolbar"><span><b></b>响应 · 200</span><button class="copy-code fluid-press" data-copy="parse-response">复制</button></div><pre id="parse-response"><code>{
+  "request_id": "parse-scan-001",
+  "filename": "scan.pdf",
+  "engine": "rapidocr",
+  "detected_type": "scanned_pdf",
+  "outputs": {
+    "text": "项目方案",
+    "markdown": "## Page 1\n\n项目方案",
+    "json": {
+      "pages": [{
+        "page": 1,
+        "width": 1654,
+        "height": 2339,
+        "text": "项目方案",
+        "blocks": [{
+          "type": "text",
+          "text": "项目方案",
+          "confidence": 0.987654,
+          "bbox": [96, 120, 502, 154]
+        }]
+      }]
+    }
+  },
+  "meta": { "page_count": 1, "duration_ms": 1260 }
+}</code></pre></div>
+          </div>
+          <div class="schema-table">
+            <div class="schema-head"><span>响应字段</span><span>类型</span><span>说明</span></div>
+            <div><code>request_id</code><span>string</span><p>请求追踪 ID，与响应头 <code>X-Request-ID</code> 一致。</p></div>
+            <div><code>filename</code><span>string</span><p>经过安全处理后的原文件名。</p></div>
+            <div><code>engine</code><span>string</span><p>最终实际使用的引擎，不一定等于请求中的 <code>auto</code>。</p></div>
+            <div><code>detected_type</code><span>string</span><p><code>image</code>、<code>text_pdf</code>、<code>scanned_pdf</code>、<code>mixed_pdf</code>。</p></div>
+            <div><code>outputs</code><span>object</span><p>只包含 <code>output_formats</code> 请求的格式。</p></div>
+            <div><code>meta.page_count</code><span>integer</span><p>文档总页数；图片固定为 1。</p></div>
+            <div><code>meta.duration_ms</code><span>integer</span><p>服务端解析耗时，单位毫秒。</p></div>
+          </div>
+        </section>
+
+        <section class="doc-section endpoint-section" id="create-job">
+          <div class="endpoint-head"><div><span class="method post">POST</span><code>/v1/jobs</code></div><span class="auth-badge">Bearer API Key · HTTP 202</span></div>
+          <div class="section-heading"><h2>创建异步解析任务</h2><p>请求字段与同步解析完全相同。文件入队后立即返回 <code>job_id</code>，Worker 在后台处理。</p></div>
+          <div class="response-note"><strong>请求参数</strong><p><code>file</code>、<code>engine</code>、<code>output_formats</code>、<code>ocr</code>、<code>dpi</code>、<code>include_bbox</code> 的定义与 <a href="#parse">同步解析</a>一致。</p></div>
+          <div class="example-pair spaced">
+            <div class="code-window"><div class="code-toolbar"><span><b></b>请求 · cURL</span><button class="copy-code fluid-press" data-copy="job-create-request">复制</button></div><pre id="job-create-request"><code>curl -X POST <span class="origin-token"></span>/v1/jobs \
+  -H "Authorization: Bearer &lt;API_KEY&gt;" \
+  -F "file=@large-document.pdf" \
+  -F "engine=auto" \
+  -F "output_formats=markdown,json" \
+  -F "ocr=auto" \
+  -F "dpi=200" \
+  -F "include_bbox=true"</code></pre></div>
+            <div class="code-window"><div class="code-toolbar"><span><b></b>响应 · 202</span><button class="copy-code fluid-press" data-copy="job-create-response">复制</button></div><pre id="job-create-response"><code>{
+  "job_id": "job_7f4c1f0c8a6e4f85a8c2…",
+  "status": "queued",
+  "progress": {
+    "current_page": 0,
+    "total_pages": 0
+  },
+  "error": null
+}</code></pre></div>
+          </div>
+        </section>
+
+        <section class="doc-section endpoint-section" id="job-status">
+          <div class="endpoint-head"><div><span class="method get">GET</span><code>/v1/jobs/{job_id}</code></div><span class="auth-badge">Bearer API Key</span></div>
+          <div class="section-heading"><h2>查询任务状态</h2><p>客户端应使用创建任务返回的 <code>job_id</code> 轮询。建议从 1–2 秒间隔开始并逐步退避。</p></div>
+          <div class="param-table path-params"><div class="param-head"><span>路径参数</span><span>类型</span><span>说明</span></div><div><code>job_id <em>必填</em></code><span>string</span><p>创建任务时返回的 ID，格式为 <code>job_...</code>。</p></div></div>
+          <div class="status-definition"><div><code>queued</code><p>已入队，等待 Worker。</p></div><div><code>processing</code><p>正在解析，进度字段持续更新。</p></div><div><code>succeeded</code><p>成功，可请求结果接口。</p></div><div><code>failed</code><p>失败，查看响应内 <code>error</code>。</p></div><div><code>expired</code><p>任务或结果超过保留期限。</p></div></div>
+          <div class="example-pair spaced">
+            <div class="code-window"><div class="code-toolbar"><span><b></b>请求</span><button class="copy-code fluid-press" data-copy="job-status-request">复制</button></div><pre id="job-status-request"><code>curl -H "Authorization: Bearer &lt;API_KEY&gt;" \
+  <span class="origin-token"></span>/v1/jobs/job_7f4c1f0c8a6e4f85a8c2</code></pre></div>
+            <div class="code-window"><div class="code-toolbar"><span><b></b>响应 · 200</span><button class="copy-code fluid-press" data-copy="job-status-response">复制</button></div><pre id="job-status-response"><code>{
+  "job_id": "job_7f4c1f0c8a6e4f85a8c2…",
+  "status": "processing",
+  "progress": {
+    "current_page": 8,
+    "total_pages": 24
+  },
+  "error": null
+}</code></pre></div>
+          </div>
+        </section>
+
+        <section class="doc-section endpoint-section" id="job-result">
+          <div class="endpoint-head"><div><span class="method get">GET</span><code>/v1/jobs/{job_id}/result</code></div><span class="auth-badge">Bearer API Key</span></div>
+          <div class="section-heading"><h2>获取异步任务结果</h2><p>仅当任务状态为 <code>succeeded</code> 时返回 HTTP 200 和完整 <code>ParseResponse</code>。未完成返回 409，结果文件过期返回 410。</p></div>
+          <div class="example-pair">
+            <div class="code-window"><div class="code-toolbar"><span><b></b>请求</span><button class="copy-code fluid-press" data-copy="job-result-request">复制</button></div><pre id="job-result-request"><code>curl -H "Authorization: Bearer &lt;API_KEY&gt;" \
+  <span class="origin-token"></span>/v1/jobs/job_7f4c1f0c8a6e4f85a8c2/result</code></pre></div>
+            <div class="code-window"><div class="code-toolbar"><span><b></b>成功响应 · 200</span><button class="copy-code fluid-press" data-copy="job-result-response">复制</button></div><pre id="job-result-response"><code>{
+  "request_id": "job_7f4c1f0c8a6e4f85a8c2…",
+  "filename": "large-document.pdf",
+  "engine": "opendataloader",
+  "detected_type": "text_pdf",
+  "outputs": {
+    "markdown": "# 文档标题\n\n正文……",
+    "json": { "pages": [] }
+  },
+  "meta": { "page_count": 24, "duration_ms": 6840 }
+}</code></pre></div>
+          </div>
+        </section>
+
+        <section class="doc-section endpoint-section" id="admin-config">
+          <div class="section-heading"><p class="section-kicker">ADMIN API</p><h2>运行配置接口</h2><p>三个操作使用同一路径并都需要 API Key。读取当前配置、完整覆盖运行时配置，或恢复环境默认值。</p></div>
+
+          <article class="operation-detail">
+            <div class="endpoint-head"><div><span class="method get">GET</span><code>/v1/admin/config</code></div><span class="auth-badge">读取配置</span></div>
+            <div class="example-pair">
+              <div class="code-window"><div class="code-toolbar"><span><b></b>请求</span><button class="copy-code fluid-press" data-copy="config-get-request">复制</button></div><pre id="config-get-request"><code>curl -H "Authorization: Bearer &lt;API_KEY&gt;" \
+  <span class="origin-token"></span>/v1/admin/config</code></pre></div>
+              <div class="code-window"><div class="code-toolbar"><span><b></b>响应 · 200</span><button class="copy-code fluid-press" data-copy="config-get-response">复制</button></div><pre id="config-get-response"><code>{
+  "values": {
+    "max_upload_mb": 50,
+    "max_pdf_pages": 50,
+    "default_dpi": 200,
+    "max_dpi": 300,
+    "text_threshold": 50,
+    "task_time_limit_seconds": 300,
+    "job_result_ttl_hours": 24,
+    "ort_intra_op_num_threads": 3,
+    "ort_inter_op_num_threads": 1
+  },
+  "defaults": { "max_upload_mb": 50, "…": "…" },
+  "source": "environment",
+  "updated_at": null,
+  "restart_notes": {
+    "task_time_limit_seconds": "Celery hard timeout…",
+    "ort_threads": "New parser instances…"
+  }
+}</code></pre></div>
+            </div>
+          </article>
+
+          <article class="operation-detail">
+            <div class="endpoint-head"><div><span class="method put">PUT</span><code>/v1/admin/config</code></div><span class="auth-badge">完整覆盖</span></div>
+            <p class="operation-copy">请求体必须包含全部 9 个字段，不支持只提交部分字段。并且 <code>default_dpi</code> 不能大于 <code>max_dpi</code>。</p>
+            <div class="schema-table config-schema">
+              <div class="schema-head"><span>字段</span><span>允许范围</span><span>作用</span></div>
+              <div><code>max_upload_mb</code><span>1–500</span><p>单文件上传上限，单位 MB。</p></div><div><code>max_pdf_pages</code><span>1–500</span><p>PDF 最大页数。</p></div><div><code>default_dpi</code><span>72–600</span><p>未传 dpi 时使用的值。</p></div><div><code>max_dpi</code><span>72–600</span><p>接口允许的最大 dpi。</p></div><div><code>text_threshold</code><span>0–10000</span><p>每页文本长度判定阈值。</p></div><div><code>task_time_limit_seconds</code><span>30–3600</span><p>异步任务硬超时秒数。</p></div><div><code>job_result_ttl_hours</code><span>1–720</span><p>任务结果保留小时数。</p></div><div><code>ort_intra_op_num_threads</code><span>1–64</span><p>ONNXRuntime 单算子内部线程数。</p></div><div><code>ort_inter_op_num_threads</code><span>1–64</span><p>ONNXRuntime 算子间线程数。</p></div>
+            </div>
+            <div class="example-pair spaced">
+              <div class="code-window"><div class="code-toolbar"><span><b></b>请求 · application/json</span><button class="copy-code fluid-press" data-copy="config-put-request">复制</button></div><pre id="config-put-request"><code>curl -X PUT <span class="origin-token"></span>/v1/admin/config \
+  -H "Authorization: Bearer &lt;API_KEY&gt;" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "max_upload_mb": 50,
+    "max_pdf_pages": 50,
+    "default_dpi": 200,
+    "max_dpi": 300,
+    "text_threshold": 50,
+    "task_time_limit_seconds": 300,
+    "job_result_ttl_hours": 24,
+    "ort_intra_op_num_threads": 3,
+    "ort_inter_op_num_threads": 1
+  }'</code></pre></div>
+              <div class="code-window"><div class="code-toolbar"><span><b></b>响应 · 200</span><button class="copy-code fluid-press" data-copy="config-put-response">复制</button></div><pre id="config-put-response"><code>{
+  "values": {
+    "max_upload_mb": 50,
+    "max_pdf_pages": 50,
+    "default_dpi": 200,
+    "max_dpi": 300,
+    "text_threshold": 50,
+    "task_time_limit_seconds": 300,
+    "job_result_ttl_hours": 24,
+    "ort_intra_op_num_threads": 3,
+    "ort_inter_op_num_threads": 1
+  },
+  "defaults": { "max_upload_mb": 50, "…": "…" },
+  "source": "runtime",
+  "updated_at": "2026-07-30T02:15:00+00:00"
+}</code></pre></div>
+            </div>
+          </article>
+
+          <article class="operation-detail last">
+            <div class="endpoint-head"><div><span class="method delete">DELETE</span><code>/v1/admin/config</code></div><span class="auth-badge">恢复环境值</span></div>
+            <p class="operation-copy">删除运行时覆盖文件，恢复环境变量配置。响应结构与读取配置相同，<code>source</code> 变为 <code>environment</code>，<code>updated_at</code> 为 <code>null</code>。</p>
+            <div class="code-window single-example"><div class="code-toolbar"><span><b></b>请求</span><button class="copy-code fluid-press" data-copy="config-delete-request">复制</button></div><pre id="config-delete-request"><code>curl -X DELETE \
+  -H "Authorization: Bearer &lt;API_KEY&gt;" \
+  <span class="origin-token"></span>/v1/admin/config</code></pre></div>
+          </article>
+        </section>
+
+        <section class="doc-section" id="errors">
+          <div class="section-heading"><p class="section-kicker">ERROR MODEL</p><h2>错误响应与处理建议</h2><p>所有服务端业务错误都使用相同结构。调用方应同时记录 HTTP 状态、<code>error.code</code> 和 <code>request_id</code>。</p></div>
+          <div class="example-pair">
+            <div class="code-window"><div class="code-toolbar"><span><b></b>错误响应示例 · 422</span></div><pre><code>{
+  "error": {
+    "code": "INVALID_ARGUMENT",
+    "message": "Invalid output formats: ['xml']",
+    "request_id": "demo-request-001"
+  }
+}</code></pre></div>
+            <div class="retry-guide"><div><strong>4xx</strong><p>修正认证、文件或参数后再请求，不应直接重试。</p></div><div><strong>409</strong><p>任务未完成，继续按退避间隔查询状态。</p></div><div><strong>5xx</strong><p>可进行有限次数指数退避重试，并保留 request_id。</p></div></div>
+          </div>
+          <div class="error-table full-error-table">
+            <div class="error-head"><span>HTTP</span><span>错误码</span><span>触发条件</span><span>建议</span></div>
+            <div><code>401</code><strong>UNAUTHORIZED</strong><p>API Key 缺失或无效。</p><span>检查 Authorization 请求头。</span></div>
+            <div><code>404</code><strong>JOB_NOT_FOUND</strong><p>任务不存在或已被清理。</p><span>停止轮询并重新创建任务。</span></div>
+            <div><code>409</code><strong>JOB_NOT_READY</strong><p>任务状态尚未 succeeded。</p><span>继续查询任务状态。</span></div>
+            <div><code>410</code><strong>JOB_RESULT_EXPIRED</strong><p>结果文件已经过期。</p><span>重新提交原文件。</span></div>
+            <div><code>413</code><strong>FILE_TOO_LARGE</strong><p>上传文件超过大小限制。</p><span>压缩、拆分或调整配置。</span></div>
+            <div><code>413</code><strong>PDF_TOO_MANY_PAGES</strong><p>PDF 页数超过限制。</p><span>拆分 PDF 或调整配置。</span></div>
+            <div><code>415</code><strong>UNSUPPORTED_FILE_TYPE</strong><p>文件头不是支持的 PDF 或图片格式。</p><span>转换文件格式后重试。</span></div>
+            <div><code>422</code><strong>INVALID_ARGUMENT</strong><p>DPI、输出格式、引擎或 OCR 组合无效。</p><span>按参数表修正请求。</span></div>
+            <div><code>422</code><strong>PDF_RENDER_FAILED</strong><p>PDF 损坏、加密或无法渲染。</p><span>检查或重新生成 PDF。</span></div>
+            <div><code>422</code><strong>OCR_FAILED</strong><p>某一页 OCR 执行失败。</p><span>检查文件并保留 request_id。</span></div>
+            <div><code>503</code><strong>ENGINE_UNAVAILABLE</strong><p>解析引擎或异步队列不可用。</p><span>检查 /health，稍后有限重试。</span></div>
+            <div><code>500</code><strong>INTERNAL_ERROR</strong><p>未预期的服务端异常。</p><span>记录 request_id 并联系维护方。</span></div>
+          </div>
+        </section>
+
+        <footer class="docs-footer"><span>LinkParse API · v0.2.0 · 9 operations</span><a href="#overview">返回顶部</a></footer>
+      </main>
+    </div>
+    <div class="docs-toast" id="docs-toast" role="status" aria-live="polite"></div>
+    <script src="/assets/fluid.js" defer></script><script src="/assets/docs.js" defer></script>
+  </body>
+</html>

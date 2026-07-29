@@ -1,0 +1,46 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "linkparse"
+version = "0.2.0"
+description = "CPU-first document parsing service powered by OpenDataLoader and RapidOCR"
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+  "celery[redis]>=5.4,<6",
+  "fastapi>=0.115,<1",
+  "gunicorn>=23,<24",
+  "onnxruntime>=1.20,<2",
+  "opendataloader-pdf>=2,<3",
+  "pillow>=11,<13",
+  "pydantic-settings>=2.7,<3",
+  "pymupdf>=1.25,<2",
+  "python-multipart>=0.0.20,<1",
+  "rapidocr>=3.8,<4",
+  "uvicorn[standard]>=0.34,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx>=0.28,<1",
+  "pytest>=8,<9",
+  "pytest-cov>=6,<7",
+  "ruff>=0.9,<1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
