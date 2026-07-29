@@ -7,7 +7,8 @@ WORKDIR /build
 COPY requirements-container.lock ./
 COPY wheelhouse /wheelhouse
 RUN --mount=type=cache,id=linkparse-pip,target=/root/.cache/pip,sharing=locked \
-    pip install --prefix=/install --find-links=/wheelhouse -r requirements-container.lock
+    pip install --prefix=/install --find-links=/wheelhouse --no-deps \
+    -r requirements-container.lock
 
 FROM python:3.11-slim-bookworm AS runtime
 
