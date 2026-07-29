@@ -68,6 +68,10 @@ docker network inspect "${shared_network}" >/dev/null
 rm -rf -- "${build_dir}"
 mkdir -p "${build_dir}"
 tar -xzf "${source_archive}" -C "${build_dir}"
+mkdir -p "${build_dir}/wheelhouse"
+if [[ -d "${deploy_dir}/wheelhouse" ]]; then
+  cp -al "${deploy_dir}/wheelhouse/." "${build_dir}/wheelhouse/"
+fi
 
 if [[ "${run_tests}" == "true" ]]; then
   DOCKER_BUILDKIT=1 docker build \

@@ -8,7 +8,8 @@ data/
 redis-data/
 certs/
 dist/
-wheelhouse/
+wheelhouse/*
+!wheelhouse/.gitkeep
 work/
 .DS_Store
 .deployment
