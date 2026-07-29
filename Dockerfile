@@ -36,8 +36,10 @@ CMD ["gunicorn", "app.main:app", "-k", "uvicorn.workers.UvicornWorker", "-w", "1
 FROM runtime AS test
 
 USER root
+COPY --from=python-dependencies /wheelhouse /wheelhouse
 RUN --mount=type=cache,id=linkparse-pip,target=/root/.cache/pip,sharing=locked \
-    pip install "httpx>=0.28,<1" "pytest>=8,<9"
+    pip install --no-index --find-links=/wheelhouse \
+    "httpx>=0.28,<1" "pytest>=8,<9"
 COPY tests ./tests
 RUN chown -R linkparse:linkparse /app/tests
 USER linkparse
