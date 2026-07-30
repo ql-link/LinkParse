@@ -36,7 +36,10 @@ services:
 
   worker:
     image: ${LINKPARSE_IMAGE:-linkparse:local}
-    command: celery -A app.workers.celery_app:celery_app worker --loglevel=info --concurrency=1
+    command: >-
+      celery -A app.workers.celery_app:celery_app worker
+      --beat --schedule=/app/data/celerybeat-schedule
+      --loglevel=info --concurrency=1
     env_file: .env
     environment:
       OMP_NUM_THREADS: "${LINKPARSE_ORT_INTRA_OP_NUM_THREADS:-3}"

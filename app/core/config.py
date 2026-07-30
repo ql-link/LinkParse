@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     text_threshold: int = 50
     task_time_limit_seconds: int = 300
     job_result_ttl_hours: int = 24
+    cleanup_interval_minutes: int = Field(default=60, ge=5, le=1440)
     log_level: str = "INFO"
     ort_intra_op_num_threads: int = 3
     ort_inter_op_num_threads: int = 1

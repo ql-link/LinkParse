@@ -4,9 +4,12 @@ import os
 from pathlib import Path
 
 from celery.exceptions import SoftTimeLimitExceeded
+from redis import Redis
+from redis.exceptions import LockError
 
 from app.core.config import get_effective_settings
 from app.core.errors import LinkParseError
+from app.services.cleanup import DataCleanup
 from app.services.parser import DocumentParser
 from app.services.result_store import ResultStore
 from app.workers.celery_app import celery_app
@@ -102,3 +105,33 @@ def parse_document(job_id: str, arguments: dict) -> None:
         raise
     finally:
         input_path.unlink(missing_ok=True)
+
+
+@celery_app.task(name="linkparse.cleanup_expired_data", ignore_result=True)
+def cleanup_expired_data() -> dict[str, int] | None:
+    settings = get_effective_settings()
+    redis_client = Redis.from_url(settings.redis_url)
+    lock = redis_client.lock(
+        "linkparse:maintenance:cleanup",
+        timeout=max(300, settings.cleanup_interval_minutes * 120),
+    )
+    if not lock.acquire(blocking=False):
+        logger.info("cleanup_skipped reason=lock_held")
+        return None
+    try:
+        report = DataCleanup(settings).run()
+        logger.info(
+            "cleanup_completed expired_jobs=%s deleted_job_metadata=%s "
+            "deleted_results=%s deleted_uploads=%s deleted_tmp_entries=%s",
+            report["expired_jobs"],
+            report["deleted_job_metadata"],
+            report["deleted_results"],
+            report["deleted_uploads"],
+            report["deleted_tmp_entries"],
+        )
+        return report
+    finally:
+        try:
+            lock.release()
+        except LockError:
+            logger.warning("cleanup_lock_release_failed")
