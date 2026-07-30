@@ -161,6 +161,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .hidden { display: none !important; }
 .result-summary { display: flex; flex-wrap: wrap; gap: 7px; margin: 19px 0 12px; }
 .result-summary span { background: var(--gray-100); border-radius: 999px; color: var(--muted); font-family: var(--mono-font); font-size: 8px; padding: 6px 8px; }
+.asset-gallery { display: grid; gap: 10px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0 0 14px; }
+.asset-gallery a { background: var(--gray-050); border: 1px solid var(--line); border-radius: var(--radius-md); color: var(--ink); overflow: hidden; text-decoration: none; }
+.asset-gallery img { aspect-ratio: 4 / 3; display: block; object-fit: contain; width: 100%; }
+.asset-gallery span { display: block; font-size: 12px; overflow: hidden; padding: 9px 10px; text-overflow: ellipsis; white-space: nowrap; }
 .result-content pre { background: #1c1c1e; border-radius: var(--radius-md); color: #e5e5ea; font-size: 11px; line-height: 1.75; margin: 0; max-height: 610px; overflow: auto; padding: 19px; white-space: pre-wrap; word-break: break-word; }
 
 .config-layout { display: grid; gap: 12px; grid-template-columns: 300px minmax(650px,1fr); margin: 0 auto; max-width: 1440px; }

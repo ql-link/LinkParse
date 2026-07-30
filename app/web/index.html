@@ -93,6 +93,7 @@
                 <label class="field"><span>OCR 策略</span><select id="parse-ocr"><option value="auto">Auto · 按需 OCR</option><option value="always">Always · 始终 OCR</option><option value="never">Never · 禁止 OCR</option></select></label>
                 <label class="field"><span>DPI</span><input type="number" id="parse-dpi" min="72" max="300" value="200"></label>
                 <label class="field checkbox-field"><span>识别信息</span><span class="check-control"><input type="checkbox" id="parse-bbox" checked><b>返回坐标与置信度</b></span></label>
+                <label class="field checkbox-field"><span>图片资源</span><span class="check-control"><input type="checkbox" id="parse-images"><b>导出图片到阿里云 OSS</b></span></label>
               </div>
               <fieldset class="format-field" id="parse-formats"><legend>输出格式 <em>*</em></legend><div>
                 <label><input type="checkbox" value="text" checked><span>Text</span></label>
@@ -106,7 +107,7 @@
             <section class="surface result-surface" aria-live="polite">
               <div class="surface-heading"><div><h2>解析结果</h2><p>ParseResponse · application/json</p></div><button class="secondary-action" id="copy-result" disabled>复制 JSON</button></div>
               <div class="result-empty" id="result-empty"><span>{ }</span><strong>等待解析结果</strong><p>提交请求后，响应内容与耗时会显示在这里。</p></div>
-              <div class="result-content hidden" id="result-content"><div class="result-summary" id="result-summary"></div><pre><code id="result-json"></code></pre></div>
+              <div class="result-content hidden" id="result-content"><div class="result-summary" id="result-summary"></div><div class="asset-gallery hidden" id="asset-gallery"></div><pre><code id="result-json"></code></pre></div>
             </section>
           </div>
         </section>
@@ -150,6 +151,7 @@
   -H "Authorization: Bearer &lt;API_KEY&gt;" \
   -F "file=@resume.pdf" \
   -F "engine=auto" \
+  -F "include_images=true" \
   -F "output_formats=text,json,markdown"</code></pre></article>
               <article class="guide-article" id="guide-async"><span class="article-index">03 · ASYNC</span><h2>异步处理大文档</h2><p>创建任务后轮询状态，成功后读取结果。状态包括 queued、processing、succeeded、failed 和 expired。</p><pre><code>curl -X POST <span class="guide-origin">http://localhost:8080</span>/v1/jobs \
   -H "Authorization: Bearer &lt;API_KEY&gt;" \

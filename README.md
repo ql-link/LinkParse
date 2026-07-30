@@ -14,6 +14,7 @@ RapidOCR + ONNXRuntime，PyMuPDF 负责 PDF 检测与页面渲染。
 - `GET /v1/info`：服务能力和公开限制信息
 - `GET/PUT/DELETE /v1/admin/config`：鉴权后的运行配置管理
 - 输出 `text`、`json`、`markdown`、`html`
+- 可选导出 PDF 内嵌图片、OCR 页面图或原始图片到阿里云 OSS，并在 `assets` 返回 URL
 - API Key、魔数文件检测、大小/页数/DPI 限制和统一错误码
 - OpenDataLoader 失败时，`engine=auto` 自动降级到 RapidOCR
 
@@ -48,6 +49,7 @@ celery -A app.workers.celery_app:celery_app worker --loglevel=info --concurrency
 ```bash
 cp .env.example .env
 # 务必修改 LINKPARSE_API_KEYS
+# 使用图片输出时还需填写 OSS AccessKey Secret 等 LINKPARSE_OSS_* 配置
 docker compose up --build -d
 curl http://localhost:8080/health
 ```
@@ -79,6 +81,7 @@ curl -X POST http://localhost:8080/v1/parse \
   -F 'engine=auto' \
   -F 'output_formats=text,json,markdown,html' \
   -F 'ocr=auto' \
+  -F 'include_images=true' \
   -F 'dpi=200'
 ```
 
@@ -103,7 +106,9 @@ curl -X POST http://localhost:8080/v1/jobs \
 
 ## 数据保留
 
-同步请求完成后立即删除原文件和中间图片。异步原文件在任务结束后删除，结果默认保留 24 小时。Worker 内置 Beat 调度器默认每 60 分钟执行一次清理：到期结果会被删除并将任务标记为 `expired`，再经过一个结果 TTL 周期后删除任务元数据；同时清理无主结果以及崩溃遗留的上传文件和临时目录。可通过 `LINKPARSE_CLEANUP_INTERVAL_MINUTES` 调整执行间隔，修改后需重启 Worker。
+同步请求完成后立即删除原文件和中间图片。异步原文件在任务结束后删除，结果默认保留 24 小时。Worker 内置 Beat 调度器默认每 60 分钟执行一次清理：到期结果及其 OSS 图片会被删除并将任务标记为 `expired`，再经过一个结果 TTL 周期后删除任务元数据；同时清理同步请求的 OSS 图片清单、无主结果以及崩溃遗留的上传文件和临时目录。可通过 `LINKPARSE_CLEANUP_INTERVAL_MINUTES` 调整执行间隔，修改后需重启 Worker。
+
+`include_images` 默认为 `false`。开启后，OpenDataLoader 会导出 PDF 内嵌图片；RapidOCR 解析 PDF 时会导出页面渲染图；直接上传图片时会保存原图。默认示例使用 `qingluo-public` 的 `LinkRarse/` 前缀和公共 OSS 域名，因此在结果保留期内返回不变的 URL；对象到期后会被清理。若改为私有桶并清空 `LINKPARSE_OSS_PUBLIC_BASE_URL`，服务会返回有时效的签名 URL。
 
 ## 测试
 

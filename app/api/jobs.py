@@ -28,6 +28,7 @@ async def create_job(
     ocr: Annotated[OcrMode, Form()] = "auto",
     dpi: Annotated[int | None, Form()] = None,
     include_bbox: Annotated[bool, Form()] = True,
+    include_images: Annotated[bool, Form()] = False,
 ) -> dict:
     job_id = f"job_{uuid.uuid4().hex}"
     effective_dpi = dpi if dpi is not None else settings.default_dpi
@@ -60,6 +61,7 @@ async def create_job(
                 "ocr_mode": ocr,
                 "dpi": effective_dpi,
                 "include_bbox": include_bbox,
+                "include_images": include_images,
             },
         )
     except Exception as exc:

@@ -168,6 +168,24 @@ function renderResult(payload) {
     chip.textContent = value;
     summary.append(chip);
   });
+  const gallery = $("#asset-gallery");
+  gallery.replaceChildren();
+  const assets = Array.isArray(payload.assets) ? payload.assets : [];
+  gallery.classList.toggle("hidden", !assets.length);
+  assets.forEach((asset) => {
+    const link = document.createElement("a");
+    link.href = asset.url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    const image = document.createElement("img");
+    image.src = asset.url;
+    image.alt = asset.filename || "解析图片";
+    image.loading = "lazy";
+    const label = document.createElement("span");
+    label.textContent = `${asset.page ? `P${asset.page} · ` : ""}${asset.filename}`;
+    link.append(image, label);
+    gallery.append(link);
+  });
   $("#result-json").textContent = JSON.stringify(payload, null, 2);
   fluid.setNow($("#result-content"), { opacity: 0, y: 12, scale: .99 });
   fluid.springTo($("#result-content"), { opacity: 1, y: 0, scale: 1 }, { stiffness: 700, damping: 53 });
@@ -193,6 +211,7 @@ async function submitParse(event) {
   body.append("dpi", $("#parse-dpi").value);
   body.append("output_formats", formats.join(","));
   body.append("include_bbox", String($("#parse-bbox").checked));
+  body.append("include_images", String($("#parse-images").checked));
   const button = $("#parse-submit");
   button.disabled = true;
   button.textContent = "正在解析…";

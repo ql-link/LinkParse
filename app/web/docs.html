@@ -48,7 +48,8 @@
   -F "file=@document.pdf" \
   -F "engine=auto" \
   -F "output_formats=markdown,json" \
-  -F "ocr=auto"</code></pre></div>
+  -F "ocr=auto" \
+  -F "include_images=true"</code></pre></div>
             <div class="code-window"><div class="code-toolbar"><span><b></b>响应 · HTTP 200</span><button class="copy-code fluid-press" data-copy="quick-response">复制</button></div><pre id="quick-response"><code>{
   "request_id": "demo-request-001",
   "filename": "document.pdf",
@@ -58,6 +59,16 @@
     "markdown": "# 项目方案\n\n正文内容……",
     "json": { "pages": [] }
   },
+  "assets": [{
+    "id": "TGlua1JhcnNlL2RlbW8taW1hZ2UucG5n",
+    "kind": "embedded_image",
+    "filename": "image1.png",
+    "media_type": "image/png",
+    "size_bytes": 28413,
+    "url": "https://qingluo-public.oss-cn-shanghai.aliyuncs.com/LinkRarse/.../image1.png",
+    "expires_at": null,
+    "page": 1
+  }],
   "meta": { "page_count": 3, "duration_ms": 842 }
 }</code></pre></div>
           </div>
@@ -137,6 +148,13 @@
   "description": "CPU-first document parsing...",
   "input_types": ["PDF", "PNG", "JPEG", "WebP", "TIFF"],
   "output_formats": ["text", "json", "markdown", "html"],
+  "image_output": {
+    "enabled_by": "include_images=true",
+    "provider": "aliyun_oss",
+    "configured": true,
+    "url_ttl_hours": null,
+    "url_mode": "public"
+  },
   "limits": {
     "max_upload_mb": 50,
     "max_pdf_pages": 50,
@@ -166,6 +184,7 @@
             <div><code>ocr</code><span>enum · <b>auto</b></span><p><code>auto</code>、<code>always</code>、<code>never</code>。</p></div>
             <div><code>dpi</code><span>integer · <b>服务默认值</b></span><p>OCR 渲染 DPI，必须在 72 与当前 <code>max_dpi</code> 之间。</p></div>
             <div><code>include_bbox</code><span>boolean · <b>true</b></span><p>是否在 OCR JSON 的每个文字块中返回 <code>bbox</code>；置信度始终返回。</p></div>
+            <div><code>include_images</code><span>boolean · <b>false</b></span><p>设为 <code>true</code> 后把内嵌图片、OCR 页面图或原始图片上传到阿里云 OSS，并返回 <code>assets</code>。</p></div>
           </div>
           <div class="example-pair spaced">
             <div class="code-window"><div class="code-toolbar"><span><b></b>请求 · cURL</span><button class="copy-code fluid-press" data-copy="parse-request">复制</button></div><pre id="parse-request"><code>curl -X POST <span class="origin-token"></span>/v1/parse \
@@ -176,7 +195,8 @@
   -F "output_formats=text,json,markdown" \
   -F "ocr=auto" \
   -F "dpi=200" \
-  -F "include_bbox=true"</code></pre></div>
+  -F "include_bbox=true" \
+  -F "include_images=true"</code></pre></div>
             <div class="code-window"><div class="code-toolbar"><span><b></b>响应 · 200</span><button class="copy-code fluid-press" data-copy="parse-response">复制</button></div><pre id="parse-response"><code>{
   "request_id": "parse-scan-001",
   "filename": "scan.pdf",
@@ -200,6 +220,16 @@
       }]
     }
   },
+  "assets": [{
+    "id": "TGlua1JhcnNlL3BhZ2VfMDAwMS5wbmc",
+    "kind": "page_image",
+    "filename": "page_0001.png",
+    "media_type": "image/png",
+    "size_bytes": 341205,
+    "url": "https://qingluo-public.oss-cn-shanghai.aliyuncs.com/LinkRarse/.../page_0001.png",
+    "expires_at": null,
+    "page": 1
+  }],
   "meta": { "page_count": 1, "duration_ms": 1260 }
 }</code></pre></div>
           </div>
@@ -210,6 +240,8 @@
             <div><code>engine</code><span>string</span><p>最终实际使用的引擎，不一定等于请求中的 <code>auto</code>。</p></div>
             <div><code>detected_type</code><span>string</span><p><code>image</code>、<code>text_pdf</code>、<code>scanned_pdf</code>、<code>mixed_pdf</code>。</p></div>
             <div><code>outputs</code><span>object</span><p>只包含 <code>output_formats</code> 请求的格式。</p></div>
+            <div><code>assets</code><span>array</span><p>图片资源列表。未开启图片输出时为空数组；<code>kind</code> 为 <code>embedded_image</code>、<code>page_image</code> 或 <code>source_image</code>。</p></div>
+            <div><code>assets[].url</code><span>string</span><p>OSS 图片 URL。公共域名模式下地址本身不签名且 <code>expires_at=null</code>；对象仍会随结果保留期限被定时删除。私有桶模式返回有时效的签名地址。</p></div>
             <div><code>meta.page_count</code><span>integer</span><p>文档总页数；图片固定为 1。</p></div>
             <div><code>meta.duration_ms</code><span>integer</span><p>服务端解析耗时，单位毫秒。</p></div>
           </div>
@@ -218,7 +250,7 @@
         <section class="doc-section endpoint-section" id="create-job">
           <div class="endpoint-head"><div><span class="method post">POST</span><code>/v1/jobs</code></div><span class="auth-badge">Bearer API Key · HTTP 202</span></div>
           <div class="section-heading"><h2>创建异步解析任务</h2><p>请求字段与同步解析完全相同。文件入队后立即返回 <code>job_id</code>，Worker 在后台处理。</p></div>
-          <div class="response-note"><strong>请求参数</strong><p><code>file</code>、<code>engine</code>、<code>output_formats</code>、<code>ocr</code>、<code>dpi</code>、<code>include_bbox</code> 的定义与 <a href="#parse">同步解析</a>一致。</p></div>
+          <div class="response-note"><strong>请求参数</strong><p><code>file</code>、<code>engine</code>、<code>output_formats</code>、<code>ocr</code>、<code>dpi</code>、<code>include_bbox</code>、<code>include_images</code> 的定义与 <a href="#parse">同步解析</a>一致。</p></div>
           <div class="example-pair spaced">
             <div class="code-window"><div class="code-toolbar"><span><b></b>请求 · cURL</span><button class="copy-code fluid-press" data-copy="job-create-request">复制</button></div><pre id="job-create-request"><code>curl -X POST <span class="origin-token"></span>/v1/jobs \
   -H "Authorization: Bearer &lt;API_KEY&gt;" \
@@ -227,7 +259,8 @@
   -F "output_formats=markdown,json" \
   -F "ocr=auto" \
   -F "dpi=200" \
-  -F "include_bbox=true"</code></pre></div>
+  -F "include_bbox=true" \
+  -F "include_images=true"</code></pre></div>
             <div class="code-window"><div class="code-toolbar"><span><b></b>响应 · 202</span><button class="copy-code fluid-press" data-copy="job-create-response">复制</button></div><pre id="job-create-response"><code>{
   "job_id": "job_7f4c1f0c8a6e4f85a8c2…",
   "status": "queued",

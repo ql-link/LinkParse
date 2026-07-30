@@ -5,11 +5,23 @@ from pydantic import BaseModel, Field, model_validator
 EngineName = Literal["auto", "opendataloader", "rapidocr"]
 OcrMode = Literal["auto", "always", "never"]
 JobStatus = Literal["queued", "processing", "succeeded", "failed", "expired"]
+AssetKind = Literal["embedded_image", "page_image", "source_image"]
 
 
 class ParseMeta(BaseModel):
     page_count: int
     duration_ms: int
+
+
+class ParseAsset(BaseModel):
+    id: str
+    kind: AssetKind
+    filename: str
+    media_type: str
+    size_bytes: int
+    url: str
+    expires_at: str | None = None
+    page: int | None = None
 
 
 class ParseResponse(BaseModel):
@@ -18,6 +30,7 @@ class ParseResponse(BaseModel):
     engine: str
     detected_type: str
     outputs: dict[str, Any]
+    assets: list[ParseAsset] = Field(default_factory=list)
     meta: ParseMeta
 
 

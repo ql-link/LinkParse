@@ -8,7 +8,9 @@ from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from app.core.config import Settings, get_effective_settings
 from app.core.security import authenticate
 from app.schemas.models import EngineName, OcrMode, ParseResponse
+from app.services.assets import OssAssetStorage
 from app.services.parser import DocumentParser, parse_formats
+from app.services.result_store import ResultStore
 from app.services.uploads import save_upload
 
 router = APIRouter(prefix="/v1", tags=["parse"], dependencies=[Depends(authenticate)])
@@ -25,6 +27,7 @@ async def parse_document(
     ocr: Annotated[OcrMode, Form()] = "auto",
     dpi: Annotated[int | None, Form()] = None,
     include_bbox: Annotated[bool, Form()] = True,
+    include_images: Annotated[bool, Form()] = False,
 ) -> dict:
     request_id = getattr(request.state, "request_id", f"req_{uuid.uuid4().hex}")
     effective_dpi = dpi if dpi is not None else settings.default_dpi
@@ -42,11 +45,18 @@ async def parse_document(
             ocr,
             effective_dpi,
             include_bbox,
+            include_images,
             request_id,
         )
+        if result["assets"]:
+            try:
+                ResultStore(settings).write_asset_manifest(result)
+            except Exception:
+                OssAssetStorage(settings).delete_assets(result["assets"])
+                raise
         logger.info(
             "parse_succeeded request_id=%s caller=%s media_type=%s size_bytes=%s "
-            "pages=%s engine=%s formats=%s duration_ms=%s",
+            "pages=%s engine=%s formats=%s assets=%s duration_ms=%s",
             request_id,
             getattr(request.state, "api_key_id", "unknown"),
             media_type,
@@ -54,6 +64,7 @@ async def parse_document(
             result["meta"]["page_count"],
             result["engine"],
             ",".join(sorted(result["outputs"])),
+            len(result["assets"]),
             result["meta"]["duration_ms"],
         )
         return result

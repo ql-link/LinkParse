@@ -18,10 +18,17 @@ class OpenDataLoaderEngine:
         except ImportError:
             return False
 
-    def parse(self, path: Path, output_dir: Path, formats: set[str]) -> dict[str, Any]:
+    def parse(
+        self,
+        path: Path,
+        output_dir: Path,
+        formats: set[str],
+        include_images: bool = False,
+    ) -> tuple[dict[str, Any], list[Path]]:
         if not self.available():
             raise EngineUnavailable(self.name)
         output_dir.mkdir(parents=True, exist_ok=True)
+        image_dir = output_dir / "images"
         try:
             import opendataloader_pdf
 
@@ -29,7 +36,9 @@ class OpenDataLoaderEngine:
                 input_path=[str(path)],
                 output_dir=str(output_dir),
                 format=",".join(sorted(formats)),
-                image_output="off",
+                image_output="external" if include_images else "off",
+                image_format="png",
+                image_dir=str(image_dir) if include_images else None,
             )
         except Exception as exc:
             raise LinkParseError(
@@ -52,4 +61,5 @@ class OpenDataLoaderEngine:
             raise LinkParseError(
                 "ENGINE_UNAVAILABLE", "OpenDataLoader produced no readable output", 503
             )
-        return outputs
+        images = sorted(item for item in image_dir.rglob("*") if item.is_file())
+        return outputs, images

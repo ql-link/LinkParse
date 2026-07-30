@@ -3,6 +3,7 @@ import os
 import time
 
 from app.core.config import Settings
+from app.services.assets import OssAssetStorage
 from app.services.cleanup import DataCleanup
 
 
@@ -87,3 +88,34 @@ def test_cleanup_removes_orphans_but_keeps_active_upload(tmp_path):
     assert not orphan_upload.exists()
     assert not stale_tmp.exists()
     assert active_upload.exists()
+
+
+def test_cleanup_deletes_oss_assets_recorded_in_result(tmp_path, monkeypatch):
+    settings = Settings(
+        data_dir=tmp_path,
+        api_keys=["test"],
+        job_result_ttl_hours=1,
+        cleanup_interval_minutes=30,
+    )
+    settings.ensure_directories()
+    now = time.time()
+    result_path = tmp_path / "results" / "asset_manifest.json"
+    result_path.write_text(
+        json.dumps({"assets": [{"id": "encoded-object-key"}]}),
+        encoding="utf-8",
+    )
+    os.utime(result_path, (now - 7200, now - 7200))
+    deleted: list[dict] = []
+
+    def fake_delete_assets(_self, assets):
+        deleted.extend(assets)
+        return len(assets)
+
+    monkeypatch.setattr(OssAssetStorage, "delete_assets", fake_delete_assets)
+
+    report = DataCleanup(settings).run(now=now)
+
+    assert report["deleted_results"] == 1
+    assert report["deleted_assets"] == 1
+    assert deleted == [{"id": "encoded-object-key"}]
+    assert not result_path.exists()

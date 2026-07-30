@@ -9,6 +9,7 @@ from redis.exceptions import LockError
 
 from app.core.config import get_effective_settings
 from app.core.errors import LinkParseError
+from app.services.assets import OssAssetStorage
 from app.services.cleanup import DataCleanup
 from app.services.parser import DocumentParser
 from app.services.result_store import ResultStore
@@ -22,6 +23,7 @@ def parse_document(job_id: str, arguments: dict) -> None:
     settings = get_effective_settings()
     store = ResultStore(settings)
     input_path = Path(arguments["path"])
+    result: dict | None = None
 
     def progress(current: int, total: int) -> None:
         store.write(
@@ -51,6 +53,7 @@ def parse_document(job_id: str, arguments: dict) -> None:
             ocr_mode=arguments["ocr_mode"],
             dpi=arguments["dpi"],
             include_bbox=arguments["include_bbox"],
+            include_images=arguments.get("include_images", False),
             request_id=job_id,
             progress=progress,
         )
@@ -72,6 +75,8 @@ def parse_document(job_id: str, arguments: dict) -> None:
             },
         )
     except SoftTimeLimitExceeded:
+        if result:
+            OssAssetStorage(settings).delete_assets(result.get("assets", []))
         store.write(
             job_id,
             {
@@ -82,6 +87,8 @@ def parse_document(job_id: str, arguments: dict) -> None:
             },
         )
     except LinkParseError as exc:
+        if result:
+            OssAssetStorage(settings).delete_assets(result.get("assets", []))
         store.write(
             job_id,
             {
@@ -92,6 +99,8 @@ def parse_document(job_id: str, arguments: dict) -> None:
             },
         )
     except Exception:
+        if result:
+            OssAssetStorage(settings).delete_assets(result.get("assets", []))
         logger.exception("job_failed job_id=%s", job_id)
         store.write(
             job_id,
@@ -122,10 +131,12 @@ def cleanup_expired_data() -> dict[str, int] | None:
         report = DataCleanup(settings).run()
         logger.info(
             "cleanup_completed expired_jobs=%s deleted_job_metadata=%s "
-            "deleted_results=%s deleted_uploads=%s deleted_tmp_entries=%s",
+            "deleted_results=%s deleted_assets=%s deleted_uploads=%s "
+            "deleted_tmp_entries=%s",
             report["expired_jobs"],
             report["deleted_job_metadata"],
             report["deleted_results"],
+            report["deleted_assets"],
             report["deleted_uploads"],
             report["deleted_tmp_entries"],
         )

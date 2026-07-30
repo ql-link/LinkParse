@@ -42,7 +42,8 @@ def console() -> FileResponse:
         headers={
             "Cache-Control": "no-store",
             "Content-Security-Policy": (
-                "default-src 'self'; connect-src 'self'; img-src 'self' data:; "
+                "default-src 'self'; connect-src 'self'; "
+                "img-src 'self' data: https://*.aliyuncs.com; "
                 "style-src 'self'; script-src 'self'; object-src 'none'; "
                 "base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
             ),
@@ -59,7 +60,8 @@ def api_documentation() -> FileResponse:
         headers={
             "Cache-Control": "no-store",
             "Content-Security-Policy": (
-                "default-src 'self'; connect-src 'self'; img-src 'self' data:; "
+                "default-src 'self'; connect-src 'self'; "
+                "img-src 'self' data: https://*.aliyuncs.com; "
                 "style-src 'self'; script-src 'self'; object-src 'none'; "
                 "base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
             ),

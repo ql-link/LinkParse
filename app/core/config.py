@@ -23,6 +23,13 @@ class Settings(BaseSettings):
     task_time_limit_seconds: int = 300
     job_result_ttl_hours: int = 24
     cleanup_interval_minutes: int = Field(default=60, ge=5, le=1440)
+    oss_endpoint: str = ""
+    oss_access_key_id: str = ""
+    oss_access_key_secret: str = ""
+    oss_bucket: str = ""
+    oss_object_prefix: str = "linkparse-assets"
+    oss_public_base_url: str = ""
+    oss_url_ttl_hours: int = Field(default=744, ge=1, le=8760)
     log_level: str = "INFO"
     ort_intra_op_num_threads: int = 3
     ort_inter_op_num_threads: int = 1

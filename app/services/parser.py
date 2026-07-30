@@ -7,6 +7,7 @@ from app.core.config import Settings
 from app.core.errors import EngineUnavailable, LinkParseError
 from app.engines.opendataloader_engine import OpenDataLoaderEngine
 from app.engines.rapidocr_engine import RapidOCREngine
+from app.services.assets import OssAssetStorage
 from app.services.format_convert import fill_missing_outputs, outputs_from_pages
 from app.services.pdf import PdfInfo, inspect_pdf, render_pdf
 
@@ -22,13 +23,16 @@ def parse_formats(value: str) -> set[str]:
 
 
 class DocumentParser:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self, settings: Settings, asset_storage: OssAssetStorage | None = None
+    ) -> None:
         self.settings = settings
         self.ocr = RapidOCREngine(
             intra_op_num_threads=settings.ort_intra_op_num_threads,
             inter_op_num_threads=settings.ort_inter_op_num_threads,
         )
         self.structured = OpenDataLoaderEngine()
+        self.asset_storage = asset_storage or OssAssetStorage(settings)
 
     def parse(
         self,
@@ -40,10 +44,12 @@ class DocumentParser:
         ocr_mode: str,
         dpi: int,
         include_bbox: bool,
+        include_images: bool,
         request_id: str,
         progress: Callable[[int, int], None] | None = None,
     ) -> dict:
         started = time.monotonic()
+        assets: list[dict] = []
         if dpi < 72 or dpi > self.settings.max_dpi:
             raise LinkParseError(
                 "INVALID_ARGUMENT", f"dpi must be between 72 and {self.settings.max_dpi}", 422
@@ -53,13 +59,25 @@ class DocumentParser:
                 raise LinkParseError("INVALID_ARGUMENT", "Images require RapidOCR", 422)
             pages = [self._ocr_image(path, 1, include_bbox)]
             outputs = outputs_from_pages(pages, formats)
+            if include_images:
+                assets, _ = self.asset_storage.upload_files(
+                    request_id, [path], kind="source_image", pages={path.name: 1}
+                )
             selected, detected, page_count = "rapidocr", "image", 1
         else:
             info = inspect_pdf(path, self.settings.max_pdf_pages, self.settings.text_threshold)
             selected = self._select_pdf_engine(engine, ocr_mode, info)
             detected, page_count = info.detected_type, info.page_count
             if selected == "rapidocr":
-                outputs = self._ocr_pdf(path, formats, dpi, include_bbox, progress)
+                outputs, assets = self._ocr_pdf(
+                    path,
+                    formats,
+                    dpi,
+                    include_bbox,
+                    progress,
+                    include_images,
+                    request_id,
+                )
             else:
                 ocr_pages = None
                 if engine == "auto" and info.detected_type == "mixed_pdf":
@@ -68,7 +86,7 @@ class DocumentParser:
                         for index, length in enumerate(info.page_text_lengths)
                         if length < self.settings.text_threshold
                     }
-                outputs = self._parse_structured_with_fallback(
+                outputs, assets = self._parse_structured_with_fallback(
                     path,
                     formats,
                     dpi,
@@ -76,6 +94,8 @@ class DocumentParser:
                     engine == "auto",
                     progress,
                     ocr_pages,
+                    include_images,
+                    request_id,
                 )
                 selected = outputs.pop("_engine")
         return {
@@ -84,6 +104,7 @@ class DocumentParser:
             "engine": selected,
             "detected_type": detected,
             "outputs": outputs,
+            "assets": assets,
             "meta": {
                 "page_count": page_count,
                 "duration_ms": round((time.monotonic() - started) * 1000),
@@ -111,8 +132,10 @@ class DocumentParser:
         dpi: int,
         include_bbox: bool,
         progress: Callable[[int, int], None] | None,
+        include_images: bool,
+        request_id: str,
         page_numbers: set[int] | None = None,
-    ) -> dict:
+    ) -> tuple[dict, list[dict]]:
         render_dir = self.settings.data_dir / "tmp" / path.stem
         try:
             images = render_pdf(path, render_dir, dpi, page_numbers)
@@ -122,7 +145,20 @@ class DocumentParser:
                 pages.append(self._ocr_image(image_path, page_number, include_bbox))
                 if progress:
                     progress(index + 1, len(images))
-            return outputs_from_pages(pages, formats)
+            outputs = outputs_from_pages(pages, formats)
+            assets: list[dict] = []
+            if include_images:
+                page_map = {
+                    image_path.name: int(image_path.stem.removeprefix("page_"))
+                    for image_path in images
+                }
+                assets, _ = self.asset_storage.upload_files(
+                    request_id,
+                    images,
+                    kind="page_image",
+                    pages=page_map,
+                )
+            return outputs, assets
         finally:
             shutil.rmtree(render_dir, ignore_errors=True)
 
@@ -135,29 +171,59 @@ class DocumentParser:
         allow_fallback: bool,
         progress: Callable[[int, int], None] | None,
         ocr_page_numbers: set[int] | None = None,
-    ) -> dict:
+        include_images: bool = False,
+        request_id: str = "unknown",
+    ) -> tuple[dict, list[dict]]:
         output_dir = self.settings.data_dir / "tmp" / f"{path.stem}_odl"
+        assets: list[dict] = []
         try:
-            outputs = self.structured.parse(path, output_dir, formats)
+            outputs, image_paths = self.structured.parse(
+                path, output_dir, formats, include_images
+            )
             outputs = fill_missing_outputs(outputs, formats)
+            if include_images:
+                image_pages = self._image_pages(outputs.get("json"))
+                assets, replacements = self.asset_storage.upload_files(
+                    request_id,
+                    image_paths,
+                    kind="embedded_image",
+                    relative_to=output_dir,
+                    pages=image_pages,
+                )
+                outputs = self.asset_storage.rewrite_outputs(outputs, replacements)
             if ocr_page_numbers:
-                ocr_outputs = self._ocr_pdf(
+                ocr_outputs, ocr_assets = self._ocr_pdf(
                     path,
                     formats,
                     dpi,
                     include_bbox,
                     progress,
+                    include_images,
+                    request_id,
                     ocr_page_numbers,
                 )
                 outputs = self._merge_ocr_fallback(outputs, ocr_outputs)
+                assets.extend(ocr_assets)
             outputs["_engine"] = "opendataloader"
-            return outputs
+            return outputs, assets
         except LinkParseError:
+            self.asset_storage.delete_assets(assets)
             if not allow_fallback:
                 raise
-            outputs = self._ocr_pdf(path, formats, dpi, include_bbox, progress)
+            outputs, assets = self._ocr_pdf(
+                path,
+                formats,
+                dpi,
+                include_bbox,
+                progress,
+                include_images,
+                request_id,
+            )
             outputs["_engine"] = "rapidocr"
-            return outputs
+            return outputs, assets
+        except Exception:
+            self.asset_storage.delete_assets(assets)
+            raise
         finally:
             shutil.rmtree(output_dir, ignore_errors=True)
 
@@ -177,3 +243,26 @@ class DocumentParser:
                     "ocr_fallback_pages": fallback_pages,
                 }
         return structured
+
+    @staticmethod
+    def _image_pages(value: object) -> dict[str, int]:
+        pages: dict[str, int] = {}
+
+        def visit(item: object) -> None:
+            if isinstance(item, dict):
+                source = item.get("source")
+                page = item.get("page number")
+                if (
+                    item.get("type") == "image"
+                    and isinstance(source, str)
+                    and isinstance(page, int)
+                ):
+                    pages[source] = page
+                for child in item.values():
+                    visit(child)
+            elif isinstance(item, list):
+                for child in item:
+                    visit(child)
+
+        visit(value)
+        return pages

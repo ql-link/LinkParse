@@ -25,6 +25,7 @@ class DataCleanup:
             "expired_jobs": 0,
             "deleted_job_metadata": 0,
             "deleted_results": 0,
+            "deleted_assets": 0,
             "deleted_uploads": 0,
             "deleted_tmp_entries": 0,
         }
@@ -57,12 +58,23 @@ class DataCleanup:
                 continue
 
             if payload.get("status") == "expired":
+                result_path = payload.get("result_path")
+                if isinstance(result_path, str) and Path(result_path).is_file():
+                    deleted_result, deleted_assets = self.store.delete_result(result_path)
+                    report["deleted_assets"] += deleted_assets
+                    if not deleted_result:
+                        continue
+                    report["deleted_results"] += 1
                 job_path.unlink(missing_ok=True)
                 report["deleted_job_metadata"] += 1
                 continue
 
-            if self._delete_result(payload.get("result_path")):
+            deleted_result, deleted_assets = self.store.delete_result(
+                payload.get("result_path")
+            )
+            if deleted_result:
                 report["deleted_results"] += 1
+            report["deleted_assets"] += deleted_assets
             self.store.write(
                 payload.get("job_id", job_path.stem),
                 {
@@ -82,8 +94,10 @@ class DataCleanup:
             if not result_path.is_file() or self._age(result_path, current_time) <= ttl_seconds:
                 continue
             if not (jobs_dir / f"{result_path.stem}.json").exists():
-                result_path.unlink(missing_ok=True)
-                report["deleted_results"] += 1
+                deleted_result, deleted_assets = self.store.delete_result(str(result_path))
+                if deleted_result:
+                    report["deleted_results"] += 1
+                report["deleted_assets"] += deleted_assets
 
     def _cleanup_uploads(
         self, current_time: float, stale_seconds: int, report: dict[str, int]
@@ -111,16 +125,6 @@ class DataCleanup:
             else:
                 entry.unlink(missing_ok=True)
             report["deleted_tmp_entries"] += 1
-
-    def _delete_result(self, result_path: object) -> bool:
-        if not isinstance(result_path, str):
-            return False
-        candidate = Path(result_path).resolve()
-        results_dir = (self.settings.data_dir / "results").resolve()
-        if not candidate.is_relative_to(results_dir) or not candidate.is_file():
-            return False
-        candidate.unlink(missing_ok=True)
-        return True
 
     @staticmethod
     def _read_json(path: Path) -> dict | None:
