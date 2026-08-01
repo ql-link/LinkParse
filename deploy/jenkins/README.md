@@ -2,17 +2,17 @@
 
 LinkParse 使用与 LinkCV Development 相同的两机部署拓扑：
 
-1. Cloud Jenkins checkout `ql-link/LinkParse` 的 `main` 分支。
+1. Cloud Jenkins checkout `ql-link/LinkParse` 的 `master` 分支。
 2. Jenkins 将当前 Git 提交打包，通过 `/var/jenkins_home/.ssh/primary_dev` 发送到 Primary。
 3. Primary 在临时目录构建 `test` 阶段并运行 `pytest`。
-4. 测试通过后构建 `linkparse:main-<commit>-b<build>`，更新 `/opt/tolink/linkparse` 的 Compose 服务。
+4. 测试通过后构建 `linkparse:<commit>-b<build>`，更新 `/opt/tolink/linkparse` 的 Compose 服务。
 5. `/health` 返回成功后流水线才结束。
 
 ## Jenkins Job
 
 - Job：`linkparse`
 - 仓库：`git@github.com:ql-link/LinkParse.git`
-- 分支：`*/main`
+- 分支：`*/master`
 - Script Path：`deploy/jenkins/Jenkinsfile`
 - Git credential：`git-cred`
 - Primary SSH key：`/var/jenkins_home/.ssh/primary_dev`
