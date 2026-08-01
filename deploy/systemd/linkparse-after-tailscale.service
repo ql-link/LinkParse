@@ -1,0 +1,22 @@
+[Unit]
+Description=Recover LinkParse bindings after Tailscale is online
+Wants=network-online.target tailscale-online.target
+After=network-online.target tailscale-online.target docker.service
+Requires=docker.service
+ConditionPathExists=/opt/tolink/linkparse/docker-compose.yml
+ConditionPathExists=/opt/tolink/linkparse/.env
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/tolink/linkparse
+ExecStartPre=/usr/bin/bash -c 'for _ in {1..90}; do /usr/bin/tailscale ip -4 | /usr/bin/grep -Fxq 100.86.10.52 && exit 0; /usr/bin/sleep 2; done; exit 1'
+ExecStart=/usr/bin/docker compose --project-directory /opt/tolink/linkparse -f /opt/tolink/linkparse/docker-compose.yml up -d --no-build api worker
+ExecStart=/usr/bin/docker compose --project-directory /opt/tolink/linkparse -f /opt/tolink/linkparse/docker-compose.yml up -d --no-build --no-deps --force-recreate nginx
+ExecStartPost=/usr/bin/bash -c 'for _ in {1..60}; do /usr/bin/curl -fsS http://100.86.10.52:18743/health >/dev/null && exit 0; /usr/bin/sleep 2; done; exit 1'
+RemainAfterExit=yes
+TimeoutStartSec=300
+Restart=on-failure
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target

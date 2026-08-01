@@ -8,6 +8,11 @@ LinkParse 使用与 LinkCV Development 相同的两机部署拓扑：
 4. 测试通过后构建 `linkparse:<commit>-b<build>`，更新 `/opt/tolink/linkparse` 的 Compose 服务。
 5. `/health` 返回成功后流水线才结束。
 
+Primary 已启用 `linkparse-after-tailscale.service`。主机重启后，该单元会等待
+`tailscale-online.target`，确认 `tailscale0` 已获得 `100.86.10.52`，再恢复
+API/Worker、重建无状态 Nginx 端口绑定，并等待 `/health` 成功。
+失败时每 15 秒自动重试。
+
 ## Jenkins Job
 
 - Job：`linkparse`

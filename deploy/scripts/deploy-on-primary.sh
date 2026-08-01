@@ -96,6 +96,11 @@ docker run --rm \
 
 install -m 0644 "${build_dir}/docker-compose.yml" "${deploy_dir}/docker-compose.yml"
 install -m 0644 "${build_dir}/nginx.conf" "${deploy_dir}/nginx.conf"
+install -m 0644 \
+  "${build_dir}/deploy/systemd/linkparse-after-tailscale.service" \
+  /etc/systemd/system/linkparse-after-tailscale.service
+systemctl daemon-reload
+systemctl enable linkparse-after-tailscale.service
 
 if grep -q '^LINKPARSE_IMAGE=' "${runtime_env}"; then
   sed -i "s|^LINKPARSE_IMAGE=.*$|LINKPARSE_IMAGE=${image}:${tag}|" "${runtime_env}"
