@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" class="auth-pending">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="LinkParse API 完整接入、参数与响应参考">
     <title>LinkParse API · 接入文档</title>
-    <link rel="stylesheet" href="/assets/docs.css">
+    <link rel="stylesheet" href="/assets/docs.css?v=20260802g">
   </head>
   <body>
     <header class="docs-bar">
@@ -20,6 +20,7 @@
           <span>开始</span><a class="active" href="#overview">API 概览</a><a href="#quickstart">快速开始</a><a href="#conventions">通用约定</a>
           <span>解析规则</span><a href="#formats">返回格式</a><a href="#auto-engine">Auto 引擎</a>
           <span>公开接口</span><a href="#health">健康检查</a><a href="#info">服务信息</a>
+          <span>账户接口</span><a href="#auth-api">注册与登录</a><a href="#account-api">Key 与解析记录</a>
           <span>解析接口</span><a href="#parse">同步解析</a><a href="#create-job">创建异步任务</a><a href="#job-status">查询任务状态</a><a href="#job-result">获取任务结果</a>
           <span>管理接口</span><a href="#admin-config">运行配置</a><a href="#errors">错误处理</a>
         </nav>
@@ -33,7 +34,7 @@
           <p class="lede">上传 PDF 或图片，服务自动选择 OpenDataLoader 或 RapidOCR，返回 Text、JSON、Markdown、HTML。本文档覆盖当前全部接口、字段定义和可直接复制的出入参示例。</p>
           <div class="api-summary-grid">
             <div><span>输入格式</span><strong>PDF / PNG / JPEG / WebP / TIFF</strong></div>
-            <div><span>认证方式</span><strong>Bearer API Key</strong></div>
+            <div><span>认证方式</span><strong>Bearer Session / API Key</strong></div>
             <div><span>同步接口</span><strong>POST /v1/parse</strong></div>
             <div><span>异步接口</span><strong>POST /v1/jobs</strong></div>
           </div>
@@ -77,7 +78,7 @@
         <section class="doc-section" id="conventions">
           <div class="section-heading"><p class="section-kicker">CONVENTIONS</p><h2>通用请求约定</h2><p>所有接口使用当前站点作为 Base URL。解析接口上传文件，管理接口提交 JSON，响应最外层始终为 JSON。</p></div>
           <div class="convention-grid">
-            <article><span>认证</span><strong>Authorization</strong><code>Bearer &lt;API_KEY&gt;</code><p>除 <code>/health</code> 和 <code>/v1/info</code> 外均必填。</p></article>
+            <article><span>认证</span><strong>Authorization</strong><code>Bearer &lt;TOKEN&gt;</code><p>注册、登录和公开接口无需 Token；账户接口必须使用登录会话，解析接口可使用会话或用户 API Key。</p></article>
             <article><span>请求追踪</span><strong>X-Request-ID</strong><code>demo-request-001</code><p>可选，允许字母、数字及 <code>._:-</code>，最长 128 字符；响应头会原样返回。</p></article>
             <article><span>文件上传</span><strong>Content-Type</strong><code>multipart/form-data</code><p>由 HTTP 客户端自动生成 boundary，不要手工固定该请求头。</p></article>
             <article><span>JSON 配置</span><strong>Content-Type</strong><code>application/json</code><p>仅 <code>PUT /v1/admin/config</code> 使用。</p></article>
@@ -123,7 +124,7 @@
 
         <section class="doc-section endpoint-section" id="health">
           <div class="endpoint-head"><div><span class="method get">GET</span><code>/health</code></div><span class="auth-badge public">无需鉴权</span></div>
-          <div class="section-heading"><h2>健康检查</h2><p>用于负载均衡、容器探活和部署验收。<code>status=degraded</code> 表示至少一个解析组件不可用，但接口本身仍返回 HTTP 200。</p></div>
+          <div class="section-heading"><h2>健康检查</h2><p>用于负载均衡、容器探活和部署验收。<code>status=degraded</code> 表示解析组件或已配置数据库不可用，但接口本身仍返回 HTTP 200。</p></div>
           <div class="example-pair">
             <div class="code-window"><div class="code-toolbar"><span><b></b>请求</span><button class="copy-code fluid-press" data-copy="health-request">复制</button></div><pre id="health-request"><code>curl <span class="origin-token"></span>/health</code></pre></div>
             <div class="code-window"><div class="code-toolbar"><span><b></b>响应 · 200</span><button class="copy-code fluid-press" data-copy="health-response">复制</button></div><pre id="health-response"><code>{
@@ -132,7 +133,8 @@
     "pymupdf": true,
     "rapidocr": true,
     "opendataloader": true
-  }
+  },
+  "database": { "configured": true, "available": true }
 }</code></pre></div>
           </div>
         </section>
@@ -160,7 +162,12 @@
     "max_pdf_pages": 50,
     "default_dpi": 200,
     "max_dpi": 300,
-    "result_ttl_hours": 24
+    "result_ttl_hours": 24,
+    "concurrency": {
+      "rapidocr": 1,
+      "opendataloader": 3,
+      "wait_seconds": 30
+    }
   },
   "endpoints": {
     "sync": "/v1/parse",
@@ -172,8 +179,40 @@
           </div>
         </section>
 
+        <section class="doc-section endpoint-section" id="auth-api">
+          <div class="section-heading"><p class="section-kicker">AUTH API</p><h2>注册、登录与会话</h2><p>密码只保存带随机盐的 scrypt 摘要。登录成功返回 <code>lps_</code> 会话令牌；生产环境必须通过 HTTPS 传输。</p></div>
+          <article class="operation-detail">
+            <div class="endpoint-head"><div><span class="method post">POST</span><code>/v1/auth/register</code></div><span class="auth-badge public">无需鉴权 · HTTP 201</span></div>
+            <div class="example-pair"><div class="code-window"><div class="code-toolbar"><span><b></b>请求</span></div><pre><code>{
+  "username": "link_user",
+  "email": "user@example.com",
+  "password": "at-least-8-characters"
+}</code></pre></div><div class="code-window"><div class="code-toolbar"><span><b></b>响应</span></div><pre><code>{
+  "access_token": "lps_...",
+  "token_type": "bearer",
+  "expires_at": "2026-08-09T10:00:00Z",
+  "user": { "id": "1", "username": "link_user", "email": "user@example.com" }
+}</code></pre></div></div>
+          </article>
+          <article class="operation-detail last">
+            <div class="endpoint-head"><div><span class="method post">POST</span><code>/v1/auth/login</code></div><span class="auth-badge public">无需鉴权</span></div>
+            <p class="operation-copy">提交 <code>account</code>（用户名或邮箱）与 <code>password</code>，响应结构与注册相同。<code>GET /v1/auth/me</code> 返回当前用户与统计；<code>POST /v1/auth/logout</code> 撤销当前会话，这两个接口必须使用 <code>lps_</code> 会话令牌。</p>
+          </article>
+        </section>
+
+        <section class="doc-section endpoint-section" id="account-api">
+          <div class="section-heading"><p class="section-kicker">ACCOUNT API</p><h2>API Key 与解析记录</h2><p>以下接口只接受登录会话，不接受用户 API Key。完整 <code>lpk_</code> Key 仅在创建响应中出现一次。</p></div>
+          <div class="schema-table">
+            <div class="schema-head"><span>方法与路径</span><span>响应</span><span>说明</span></div>
+            <div><code>GET /v1/account/keys</code><span>200</span><p>列出当前用户的有效和已撤销 Key，仅返回前缀。</p></div>
+            <div><code>POST /v1/account/keys</code><span>201</span><p>请求体为 <code>{"name":"生产服务"}</code>，最多保留 10 个有效 Key。</p></div>
+            <div><code>DELETE /v1/account/keys/{key_id}</code><span>204</span><p>立即撤销当前用户指定 Key。</p></div>
+            <div><code>GET /v1/account/records</code><span>200</span><p>使用 <code>limit=1..100</code>、<code>offset&gt;=0</code> 分页查询同步与异步解析记录。</p></div>
+          </div>
+        </section>
+
         <section class="doc-section endpoint-section" id="parse">
-          <div class="endpoint-head"><div><span class="method post">POST</span><code>/v1/parse</code></div><span class="auth-badge">Bearer API Key</span></div>
+          <div class="endpoint-head"><div><span class="method post">POST</span><code>/v1/parse</code></div><span class="auth-badge">Bearer Session / API Key</span></div>
           <div class="section-heading"><h2>同步解析文档</h2><p>上传文件并等待解析完成，成功返回 <code>ParseResponse</code>。适合图片和短 PDF；长文档建议使用异步任务。</p></div>
           <h3 class="subheading">请求参数 · multipart/form-data</h3>
           <div class="param-table">
@@ -248,7 +287,7 @@
         </section>
 
         <section class="doc-section endpoint-section" id="create-job">
-          <div class="endpoint-head"><div><span class="method post">POST</span><code>/v1/jobs</code></div><span class="auth-badge">Bearer API Key · HTTP 202</span></div>
+          <div class="endpoint-head"><div><span class="method post">POST</span><code>/v1/jobs</code></div><span class="auth-badge">Bearer Session / API Key · HTTP 202</span></div>
           <div class="section-heading"><h2>创建异步解析任务</h2><p>请求字段与同步解析完全相同。文件入队后立即返回 <code>job_id</code>，Worker 在后台处理。</p></div>
           <div class="response-note"><strong>请求参数</strong><p><code>file</code>、<code>engine</code>、<code>output_formats</code>、<code>ocr</code>、<code>dpi</code>、<code>include_bbox</code>、<code>include_images</code> 的定义与 <a href="#parse">同步解析</a>一致。</p></div>
           <div class="example-pair spaced">
@@ -274,7 +313,7 @@
         </section>
 
         <section class="doc-section endpoint-section" id="job-status">
-          <div class="endpoint-head"><div><span class="method get">GET</span><code>/v1/jobs/{job_id}</code></div><span class="auth-badge">Bearer API Key</span></div>
+          <div class="endpoint-head"><div><span class="method get">GET</span><code>/v1/jobs/{job_id}</code></div><span class="auth-badge">Bearer Session / API Key</span></div>
           <div class="section-heading"><h2>查询任务状态</h2><p>客户端应使用创建任务返回的 <code>job_id</code> 轮询。建议从 1–2 秒间隔开始并逐步退避。</p></div>
           <div class="param-table path-params"><div class="param-head"><span>路径参数</span><span>类型</span><span>说明</span></div><div><code>job_id <em>必填</em></code><span>string</span><p>创建任务时返回的 ID，格式为 <code>job_...</code>。</p></div></div>
           <div class="status-definition"><div><code>queued</code><p>已入队，等待 Worker。</p></div><div><code>processing</code><p>正在解析，进度字段持续更新。</p></div><div><code>succeeded</code><p>成功，可请求结果接口。</p></div><div><code>failed</code><p>失败，查看响应内 <code>error</code>。</p></div><div><code>expired</code><p>任务或结果超过保留期限。</p></div></div>
@@ -294,7 +333,7 @@
         </section>
 
         <section class="doc-section endpoint-section" id="job-result">
-          <div class="endpoint-head"><div><span class="method get">GET</span><code>/v1/jobs/{job_id}/result</code></div><span class="auth-badge">Bearer API Key</span></div>
+          <div class="endpoint-head"><div><span class="method get">GET</span><code>/v1/jobs/{job_id}/result</code></div><span class="auth-badge">Bearer Session / API Key</span></div>
           <div class="section-heading"><h2>获取异步任务结果</h2><p>仅当任务状态为 <code>succeeded</code> 时返回 HTTP 200 和完整 <code>ParseResponse</code>。未完成返回 409，结果文件过期返回 410。</p></div>
           <div class="example-pair">
             <div class="code-window"><div class="code-toolbar"><span><b></b>请求</span><button class="copy-code fluid-press" data-copy="job-result-request">复制</button></div><pre id="job-result-request"><code>curl -H "Authorization: Bearer &lt;API_KEY&gt;" \
@@ -314,7 +353,7 @@
         </section>
 
         <section class="doc-section endpoint-section" id="admin-config">
-          <div class="section-heading"><p class="section-kicker">ADMIN API</p><h2>运行配置接口</h2><p>三个操作使用同一路径并都需要 API Key。读取当前配置、完整覆盖运行时配置，或恢复环境默认值。</p></div>
+          <div class="section-heading"><p class="section-kicker">ADMIN API</p><h2>运行配置接口</h2><p>三个操作使用同一路径，必须由 <code>is_admin=true</code> 的账户会话调用（系统管理 Key 仍可用于自动化）。用于读取、完整覆盖或恢复全局运行策略。</p></div>
 
           <article class="operation-detail">
             <div class="endpoint-head"><div><span class="method get">GET</span><code>/v1/admin/config</code></div><span class="auth-badge">读取配置</span></div>
@@ -329,6 +368,9 @@
     "max_dpi": 300,
     "text_threshold": 50,
     "task_time_limit_seconds": 300,
+    "ocr_max_concurrency": 1,
+    "opendataloader_max_concurrency": 3,
+    "concurrency_wait_seconds": 30,
     "job_result_ttl_hours": 24,
     "ort_intra_op_num_threads": 3,
     "ort_inter_op_num_threads": 1
@@ -346,10 +388,11 @@
 
           <article class="operation-detail">
             <div class="endpoint-head"><div><span class="method put">PUT</span><code>/v1/admin/config</code></div><span class="auth-badge">完整覆盖</span></div>
-            <p class="operation-copy">请求体必须包含全部 9 个字段，不支持只提交部分字段。并且 <code>default_dpi</code> 不能大于 <code>max_dpi</code>。</p>
+            <p class="operation-copy">请求体必须包含全部 12 个字段，不支持只提交部分字段。并且 <code>default_dpi</code> 不能大于 <code>max_dpi</code>。并发上限由同步接口与异步 Worker 共同使用。</p>
             <div class="schema-table config-schema">
               <div class="schema-head"><span>字段</span><span>允许范围</span><span>作用</span></div>
               <div><code>max_upload_mb</code><span>1–500</span><p>单文件上传上限，单位 MB。</p></div><div><code>max_pdf_pages</code><span>1–500</span><p>PDF 最大页数。</p></div><div><code>default_dpi</code><span>72–600</span><p>未传 dpi 时使用的值。</p></div><div><code>max_dpi</code><span>72–600</span><p>接口允许的最大 dpi。</p></div><div><code>text_threshold</code><span>0–10000</span><p>每页文本长度判定阈值。</p></div><div><code>task_time_limit_seconds</code><span>30–3600</span><p>异步任务硬超时秒数。</p></div><div><code>job_result_ttl_hours</code><span>1–720</span><p>任务结果保留小时数。</p></div><div><code>ort_intra_op_num_threads</code><span>1–64</span><p>ONNXRuntime 单算子内部线程数。</p></div><div><code>ort_inter_op_num_threads</code><span>1–64</span><p>ONNXRuntime 算子间线程数。</p></div>
+              <div><code>ocr_max_concurrency</code><span>1–32</span><p>RapidOCR 分布式并发上限。</p></div><div><code>opendataloader_max_concurrency</code><span>1–32</span><p>OpenDataLoader 分布式并发上限。</p></div><div><code>concurrency_wait_seconds</code><span>0–600</span><p>同步请求等待可用槽位的秒数。</p></div>
             </div>
             <div class="example-pair spaced">
               <div class="code-window"><div class="code-toolbar"><span><b></b>请求 · application/json</span><button class="copy-code fluid-press" data-copy="config-put-request">复制</button></div><pre id="config-put-request"><code>curl -X PUT <span class="origin-token"></span>/v1/admin/config \
@@ -362,6 +405,9 @@
     "max_dpi": 300,
     "text_threshold": 50,
     "task_time_limit_seconds": 300,
+    "ocr_max_concurrency": 1,
+    "opendataloader_max_concurrency": 3,
+    "concurrency_wait_seconds": 30,
     "job_result_ttl_hours": 24,
     "ort_intra_op_num_threads": 3,
     "ort_inter_op_num_threads": 1
@@ -374,6 +420,9 @@
     "max_dpi": 300,
     "text_threshold": 50,
     "task_time_limit_seconds": 300,
+    "ocr_max_concurrency": 1,
+    "opendataloader_max_concurrency": 3,
+    "concurrency_wait_seconds": 30,
     "job_result_ttl_hours": 24,
     "ort_intra_op_num_threads": 3,
     "ort_inter_op_num_threads": 1
@@ -408,7 +457,13 @@
           </div>
           <div class="error-table full-error-table">
             <div class="error-head"><span>HTTP</span><span>错误码</span><span>触发条件</span><span>建议</span></div>
-            <div><code>401</code><strong>UNAUTHORIZED</strong><p>API Key 缺失或无效。</p><span>检查 Authorization 请求头。</span></div>
+            <div><code>401</code><strong>UNAUTHORIZED</strong><p>访问令牌缺失或无效。</p><span>检查 Authorization 请求头。</span></div>
+            <div><code>403</code><strong>ADMIN_REQUIRED</strong><p>当前账户没有管理员权限。</p><span>由管理员为 users.is_admin 授权。</span></div>
+            <div><code>401</code><strong>SESSION_REQUIRED</strong><p>账户接口收到的不是有效登录会话。</p><span>重新登录后使用 lps_ 会话令牌。</span></div>
+            <div><code>401</code><strong>INVALID_CREDENTIALS</strong><p>用户名、邮箱或密码错误。</p><span>检查输入；连续失败请求会受到限流。</span></div>
+            <div><code>409</code><strong>ACCOUNT_EXISTS</strong><p>用户名或邮箱已注册。</p><span>直接登录或更换账户信息。</span></div>
+            <div><code>409</code><strong>KEY_LIMIT_REACHED</strong><p>已有 10 个有效 API Key。</p><span>撤销不用的 Key 后重试。</span></div>
+            <div><code>429</code><strong>CONCURRENCY_LIMIT_REACHED</strong><p>对应解析引擎在等待时间内没有可用槽位。</p><span>稍后重试，或由管理员调整该引擎并发上限。</span></div>
             <div><code>404</code><strong>JOB_NOT_FOUND</strong><p>任务不存在或已被清理。</p><span>停止轮询并重新创建任务。</span></div>
             <div><code>409</code><strong>JOB_NOT_READY</strong><p>任务状态尚未 succeeded。</p><span>继续查询任务状态。</span></div>
             <div><code>410</code><strong>JOB_RESULT_EXPIRED</strong><p>结果文件已经过期。</p><span>重新提交原文件。</span></div>
@@ -419,14 +474,15 @@
             <div><code>422</code><strong>PDF_RENDER_FAILED</strong><p>PDF 损坏、加密或无法渲染。</p><span>检查或重新生成 PDF。</span></div>
             <div><code>422</code><strong>OCR_FAILED</strong><p>某一页 OCR 执行失败。</p><span>检查文件并保留 request_id。</span></div>
             <div><code>503</code><strong>ENGINE_UNAVAILABLE</strong><p>解析引擎或异步队列不可用。</p><span>检查 /health，稍后有限重试。</span></div>
+            <div><code>503</code><strong>DATABASE_UNAVAILABLE</strong><p>账户或解析记录无法可靠写入数据库。</p><span>使用新的 X-Request-ID 有限重试，并检查数据库健康状态。</span></div>
             <div><code>500</code><strong>INTERNAL_ERROR</strong><p>未预期的服务端异常。</p><span>记录 request_id 并联系维护方。</span></div>
           </div>
         </section>
 
-        <footer class="docs-footer"><span>LinkParse API · v0.2.0 · 9 operations</span><a href="#overview">返回顶部</a></footer>
+        <footer class="docs-footer"><span>LinkParse API · v0.2.0 · 17 operations</span><a href="#overview">返回顶部</a></footer>
       </main>
     </div>
     <div class="docs-toast" id="docs-toast" role="status" aria-live="polite"></div>
-    <script src="/assets/fluid.js" defer></script><script src="/assets/docs.js" defer></script>
+    <script src="/assets/fluid.js?v=20260802c" defer></script><script src="/assets/docs.js?v=20260802d" defer></script>
   </body>
 </html>

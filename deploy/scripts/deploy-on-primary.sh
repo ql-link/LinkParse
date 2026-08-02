@@ -63,7 +63,14 @@ if [[ "$(stat -c '%a' "${runtime_env}")" != "600" ]]; then
 fi
 shared_network="$(sed -n 's/^LINKPARSE_SHARED_NETWORK=//p' "${runtime_env}" | tail -n 1)"
 shared_network="${shared_network:-link_tolink-net}"
+database_network="$(sed -n 's/^LINKPARSE_DATABASE_NETWORK=//p' "${runtime_env}" | tail -n 1)"
+database_network="${database_network:-tolink-dev-net}"
+if ! grep -Eq '^LINKPARSE_DATABASE_URL=.+$' "${runtime_env}"; then
+  echo "LINKPARSE_DATABASE_URL must be configured in ${runtime_env}" >&2
+  exit 13
+fi
 docker network inspect "${shared_network}" >/dev/null
+docker network inspect "${database_network}" >/dev/null
 
 rm -rf -- "${build_dir}"
 mkdir -p "${build_dir}"
@@ -94,6 +101,12 @@ docker run --rm \
   "${image}:${tag}" \
   python -c 'import os; from redis import Redis; assert Redis.from_url(os.environ["LINKPARSE_REDIS_URL"]).ping()'
 
+docker run --rm \
+  --network "${database_network}" \
+  --env-file "${runtime_env}" \
+  "${image}:${tag}" \
+  python -c 'from app.core.config import get_settings; from app.db import database_for_url; settings = get_settings(); assert settings.database_url; database = database_for_url(settings.database_url); database.initialize(); assert database.ping()'
+
 install -m 0644 "${build_dir}/docker-compose.yml" "${deploy_dir}/docker-compose.yml"
 install -m 0644 "${build_dir}/nginx.conf" "${deploy_dir}/nginx.conf"
 install -m 0644 \
@@ -116,7 +129,8 @@ docker compose --project-directory "${deploy_dir}" \
 for _ in $(seq 1 45); do
   health_status="$(docker inspect --format='{{.State.Health.Status}}' linkparse-api-1 2>/dev/null || true)"
   if [[ "${health_status}" == "healthy" ]] && \
-    curl -fsS "${http_url}/health" >/dev/null; then
+    curl -fsS "${http_url}/health" | python3 -c 'import json, sys; payload = json.load(sys.stdin); assert payload["status"] == "ok"; assert payload["database"] == {"configured": True, "available": True}' && \
+    [[ "$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data '{}' "${http_url}/v1/auth/register")" == "422" ]]; then
     cat >"${deploy_dir}/.deployment" <<EOF
 image=${image}:${tag}
 revision=${commit_short}

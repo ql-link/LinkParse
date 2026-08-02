@@ -25,6 +25,7 @@ services:
     networks:
       - default
       - shared
+      - database
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 15s
@@ -39,7 +40,7 @@ services:
     command: >-
       celery -A app.workers.celery_app:celery_app worker
       --beat --schedule=/app/data/celerybeat-schedule
-      --loglevel=info --concurrency=1
+      --loglevel=info --concurrency=${LINKPARSE_WORKER_CONCURRENCY:-6}
     env_file: .env
     environment:
       OMP_NUM_THREADS: "${LINKPARSE_ORT_INTRA_OP_NUM_THREADS:-3}"
@@ -50,6 +51,7 @@ services:
     networks:
       - default
       - shared
+      - database
     restart: unless-stopped
     cpus: 3.0
     mem_limit: 6g
@@ -58,3 +60,6 @@ networks:
   shared:
     external: true
     name: ${LINKPARSE_SHARED_NETWORK:-link_tolink-net}
+  database:
+    external: true
+    name: ${LINKPARSE_DATABASE_NETWORK:-tolink-dev-net}

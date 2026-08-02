@@ -8,9 +8,11 @@ from redis import Redis
 from redis.exceptions import LockError
 
 from app.core.config import get_effective_settings
-from app.core.errors import LinkParseError
+from app.core.errors import ConcurrencyLimitReached, LinkParseError
+from app.db import database_for_url
 from app.services.assets import OssAssetStorage
 from app.services.cleanup import DataCleanup
+from app.services.parse_records import update_parse_record
 from app.services.parser import DocumentParser
 from app.services.result_store import ResultStore
 from app.workers.celery_app import celery_app
@@ -18,12 +20,16 @@ from app.workers.celery_app import celery_app
 logger = logging.getLogger("linkparse.worker")
 
 
-@celery_app.task(name="linkparse.parse_document")
+@celery_app.task(name="linkparse.parse_document", max_retries=None)
 def parse_document(job_id: str, arguments: dict) -> None:
     settings = get_effective_settings()
+    worker_settings = settings.model_copy(update={"concurrency_wait_seconds": 0})
     store = ResultStore(settings)
+    database = database_for_url(settings.database_url)
+    record_id = arguments.get("record_id")
     input_path = Path(arguments["path"])
     result: dict | None = None
+    delete_input = True
 
     def progress(current: int, total: int) -> None:
         store.write(
@@ -43,8 +49,9 @@ def parse_document(job_id: str, arguments: dict) -> None:
             "progress": {"current_page": 0, "total_pages": 0},
         },
     )
+    update_parse_record(database, record_id, status="processing")
     try:
-        result = DocumentParser(settings).parse(
+        result = DocumentParser(worker_settings).parse(
             path=input_path,
             filename=arguments["filename"],
             media_type=arguments["media_type"],
@@ -74,6 +81,15 @@ def parse_document(job_id: str, arguments: dict) -> None:
                 "result_path": str(result_path),
             },
         )
+        update_parse_record(
+            database,
+            record_id,
+            status="succeeded",
+            engine=result["engine"],
+            detected_type=result["detected_type"],
+            page_count=result["meta"]["page_count"],
+            duration_ms=result["meta"]["duration_ms"],
+        )
     except SoftTimeLimitExceeded:
         if result:
             OssAssetStorage(settings).delete_assets(result.get("assets", []))
@@ -86,6 +102,25 @@ def parse_document(job_id: str, arguments: dict) -> None:
                 "error": {"code": "PARSE_TIMEOUT", "message": "Document parsing timed out"},
             },
         )
+        update_parse_record(
+            database,
+            record_id,
+            status="failed",
+            error_code="PARSE_TIMEOUT",
+            error_message="Document parsing timed out",
+        )
+    except ConcurrencyLimitReached as exc:
+        delete_input = False
+        store.write(
+            job_id,
+            {
+                "job_id": job_id,
+                "status": "queued",
+                "progress": {"current_page": 0, "total_pages": 0},
+            },
+        )
+        update_parse_record(database, record_id, status="queued")
+        raise parse_document.retry(exc=exc, countdown=1) from exc
     except LinkParseError as exc:
         if result:
             OssAssetStorage(settings).delete_assets(result.get("assets", []))
@@ -97,6 +132,13 @@ def parse_document(job_id: str, arguments: dict) -> None:
                 "progress": {},
                 "error": {"code": exc.code, "message": exc.message},
             },
+        )
+        update_parse_record(
+            database,
+            record_id,
+            status="failed",
+            error_code=exc.code,
+            error_message=exc.message,
         )
     except Exception:
         if result:
@@ -111,9 +153,17 @@ def parse_document(job_id: str, arguments: dict) -> None:
                 "error": {"code": "INTERNAL_ERROR", "message": "Document parsing failed"},
             },
         )
+        update_parse_record(
+            database,
+            record_id,
+            status="failed",
+            error_code="INTERNAL_ERROR",
+            error_message="Document parsing failed",
+        )
         raise
     finally:
-        input_path.unlink(missing_ok=True)
+        if delete_input:
+            input_path.unlink(missing_ok=True)
 
 
 @celery_app.task(name="linkparse.cleanup_expired_data", ignore_result=True)
@@ -129,16 +179,20 @@ def cleanup_expired_data() -> dict[str, int] | None:
         return None
     try:
         report = DataCleanup(settings).run()
+        report["deleted_sessions"] = database_for_url(
+            settings.database_url
+        ).delete_expired_sessions()
         logger.info(
             "cleanup_completed expired_jobs=%s deleted_job_metadata=%s "
             "deleted_results=%s deleted_assets=%s deleted_uploads=%s "
-            "deleted_tmp_entries=%s",
+            "deleted_tmp_entries=%s deleted_sessions=%s",
             report["expired_jobs"],
             report["deleted_job_metadata"],
             report["deleted_results"],
             report["deleted_assets"],
             report["deleted_uploads"],
             report["deleted_tmp_entries"],
+            report["deleted_sessions"],
         )
         return report
     finally:

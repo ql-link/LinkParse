@@ -3,174 +3,193 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="LinkParse 文档解析服务控制台">
+    <meta name="description" content="LinkParse 文档解析工作台">
     <title>LinkParse · 文档解析控制台</title>
-    <link rel="stylesheet" href="/assets/styles.css">
+    <link rel="stylesheet" href="/assets/vendor/phosphor/phosphor.css?v=2.1.2">
+    <link rel="stylesheet" href="/assets/styles.css?v=20260802h">
   </head>
-  <body>
-    <div class="app-shell">
+  <body class="auth-pending">
+    <section class="auth-gate" id="auth-gate" aria-labelledby="auth-title">
+      <div class="auth-story">
+        <a class="auth-brand-lockup" href="/" aria-label="LinkParse">
+          <span class="brand-mark">LP</span>
+          <span><strong>LinkParse</strong><small>文档解析服务</small></span>
+        </a>
+        <div class="auth-story-main">
+          <div class="auth-story-copy">
+            <p class="eyebrow">PRIVATE DOCUMENT WORKSPACE</p>
+            <h1>一个入口，完成文档解析与任务管理。</h1>
+            <p>从上传、解析到结构化结果，全流程留痕。账户权限、API Key 与运行策略各自清晰分工。</p>
+          </div>
+          <div class="auth-flow" aria-label="文档解析流程">
+            <div><span><i class="ph ph-upload-simple" aria-hidden="true"></i></span><strong>上传文档</strong><small>PDF、扫描件与图片</small></div>
+            <i class="ph ph-arrow-right" aria-hidden="true"></i>
+            <div><span><i class="ph ph-cpu" aria-hidden="true"></i></span><strong>智能解析</strong><small>结构解析或 OCR</small></div>
+            <i class="ph ph-arrow-right" aria-hidden="true"></i>
+            <div><span><i class="ph ph-brackets-curly" aria-hidden="true"></i></span><strong>获得结果</strong><small>JSON、Markdown 与记录</small></div>
+          </div>
+        </div>
+        <div class="auth-story-footer"><span><i class="ph ph-shield-check" aria-hidden="true"></i>账户级访问控制</span><span>LinkParse <b id="service-version">v—</b></span></div>
+      </div>
+
+      <div class="auth-panel">
+        <div class="auth-card">
+          <div class="auth-heading">
+            <span class="auth-symbol"><i class="ph ph-sparkle" aria-hidden="true"></i></span>
+            <div><h2 id="auth-title">欢迎使用 LinkParse</h2><p>登录后进入文档解析工作台</p></div>
+          </div>
+          <div class="auth-tabs" role="tablist" aria-label="账户操作">
+            <button class="active" data-auth-tab="login" role="tab" aria-selected="true">登录</button>
+            <button data-auth-tab="register" role="tab" aria-selected="false">创建账户</button>
+          </div>
+          <p class="form-error" id="auth-error" role="alert"></p>
+          <form id="login-form" class="auth-form active">
+            <label class="field"><span>用户名或邮箱</span><span class="input-shell"><i class="ph ph-user" aria-hidden="true"></i><input name="account" autocomplete="username" placeholder="输入用户名或邮箱" required></span></label>
+            <label class="field"><span>密码</span><span class="input-shell"><i class="ph ph-lock" aria-hidden="true"></i><input name="password" type="password" autocomplete="current-password" placeholder="输入密码" required></span></label>
+            <button class="primary-action wide" type="submit"><span>登录工作台</span><i class="ph ph-arrow-right" aria-hidden="true"></i></button>
+          </form>
+          <form id="register-form" class="auth-form">
+            <label class="field"><span>用户名</span><span class="input-shell"><i class="ph ph-user" aria-hidden="true"></i><input name="username" minlength="2" maxlength="32" autocomplete="username" placeholder="2–32 个字符" required></span></label>
+            <label class="field"><span>邮箱</span><span class="input-shell"><i class="ph ph-envelope" aria-hidden="true"></i><input name="email" type="email" autocomplete="email" placeholder="name@example.com" required></span></label>
+            <label class="field"><span>密码</span><span class="input-shell"><i class="ph ph-lock" aria-hidden="true"></i><input name="password" type="password" minlength="8" autocomplete="new-password" placeholder="至少 8 个字符" required></span></label>
+            <button class="primary-action wide" type="submit"><span>创建并进入工作台</span><i class="ph ph-arrow-right" aria-hidden="true"></i></button>
+          </form>
+          <div class="auth-security"><i class="ph ph-shield-check" aria-hidden="true"></i><span>密码与凭证仅保存不可逆摘要，登录会话只保存在当前标签页。</span></div>
+        </div>
+        <div class="auth-service service-orb pending" id="auth-service-status"><i></i><span>正在连接服务</span></div>
+      </div>
+    </section>
+
+    <div class="app-shell hidden" id="app-shell" aria-hidden="true">
       <aside class="app-sidebar">
-        <a class="brand fluid-press" href="#overview" aria-label="LinkParse 首页">
+        <a class="brand fluid-press" href="#playground" aria-label="LinkParse 解析工作台">
           <span class="brand-mark">LP</span>
           <span class="brand-copy"><strong>LinkParse</strong><small>文档解析服务</small></span>
         </a>
 
         <nav class="fluid-dock" id="fluid-dock" aria-label="主导航">
           <span class="dock-indicator" aria-hidden="true"></span>
-          <button class="dock-item active" data-view="overview">概览</button>
-          <button class="dock-item" data-view="playground">解析控制台</button>
-          <button class="dock-item" data-view="configuration">运行配置</button>
-          <button class="dock-item" data-view="guide">使用指南</button>
+          <button class="dock-item active" data-view="playground" aria-current="page"><i class="ph ph-file-arrow-up" aria-hidden="true"></i><span>解析控制台</span></button>
+          <button class="dock-item" data-view="records"><i class="ph ph-clock-counter-clockwise" aria-hidden="true"></i><span>最近任务</span></button>
+          <button class="dock-item" data-view="account"><i class="ph ph-key" aria-hidden="true"></i><span>API Keys</span></button>
+          <button class="dock-item admin-only hidden" data-view="configuration"><i class="ph ph-gear-six" aria-hidden="true"></i><span>运行配置</span></button>
+          <button class="dock-item" data-view="guide"><i class="ph ph-book-open-text" aria-hidden="true"></i><span>使用文档</span></button>
         </nav>
 
         <div class="sidebar-footer">
-          <a class="sidebar-docs fluid-press" href="/docs"><span>API</span><div><strong>开发者文档</strong><small>接口、参数与示例</small></div></a>
           <div class="service-orb pending" id="service-status"><i></i><span>正在连接服务</span></div>
-          <p>LinkParse <b id="service-version">v—</b></p>
+          <div class="user-entry" id="user-entry"><span class="user-avatar">U</span><span><strong>—</strong><small>标准账户</small></span></div>
+          <button class="logout-action" id="account-session-action"><i class="ph ph-sign-out" aria-hidden="true"></i><span>退出登录</span></button>
         </div>
       </aside>
 
       <main class="workspace" id="stage">
-        <section class="view active" id="view-overview" aria-labelledby="overview-title">
-          <header class="page-heading">
-            <div><p class="eyebrow">OVERVIEW</p><h1 id="overview-title">文档解析</h1><p>统一处理 PDF 与图片，自动选择结构化解析或 OCR。</p></div>
-            <button class="primary-action" data-go="playground">开始解析</button>
+        <section class="view active" id="view-playground" aria-labelledby="playground-title">
+          <header class="page-heading compact-heading">
+            <div><p class="eyebrow">PARSER WORKSPACE</p><h1 id="playground-title">文档解析</h1><p>上传文档并选择解析模式，LinkParse 将提取结构化内容并返回结果。</p></div>
+            <div class="heading-actions"><a class="icon-action" href="/docs" aria-label="API 文档"><i class="ph ph-book-open-text" aria-hidden="true"></i><span>API 文档</span></a><span class="status-pill" id="system-state">正在检查引擎</span></div>
           </header>
 
-          <dl class="metrics-grid">
-            <div><dt>单文件上限</dt><dd id="limit-upload">—</dd><small>支持 PDF 与常见图片</small></div>
-            <div><dt>PDF 页数</dt><dd id="limit-pages">—</dd><small>超过限制将拒绝请求</small></div>
-            <div><dt>默认精度</dt><dd id="limit-dpi">—</dd><small>扫描件渲染 DPI</small></div>
-            <div><dt>结果保留</dt><dd id="limit-ttl">—</dd><small>异步任务结果有效期</small></div>
-          </dl>
+          <form id="parse-form" class="parse-composer">
+            <input type="hidden" id="parse-api-key" autocomplete="off">
+            <span class="sr-only" id="parse-auth-hint">登录会话已启用</span>
+            <label class="hero-drop" id="dropzone">
+              <input type="file" id="parse-file" accept=".pdf,.png,.jpg,.jpeg,.webp,.tif,.tiff" required>
+              <span class="upload-icon"><i class="ph ph-file-arrow-up" aria-hidden="true"></i></span>
+              <strong id="file-label">上传文档</strong>
+              <p>将 PDF 或图片拖到此处，或 <u>点击选择文件</u></p>
+              <small>支持 PDF、PNG、JPG、JPEG，最大 <b id="drop-limit">—</b></small>
+            </label>
 
-          <div class="overview-grid">
-            <section class="surface upload-surface">
-              <div class="surface-heading"><div><h2>快速解析</h2><p>拖入文件后进入解析控制台继续设置参数。</p></div><span class="status-pill" id="system-state">正在检查引擎</span></div>
-              <label class="hero-drop" id="hero-drop">
-                <input type="file" id="hero-file" accept=".pdf,.png,.jpg,.jpeg,.webp,.tif,.tiff">
-                <span class="upload-mark">PDF</span>
-                <strong>拖入文档，或点击选择文件</strong>
-                <p>PDF、PNG、JPEG、WebP、TIFF</p>
-                <span class="drop-cta">选择文件</span>
-              </label>
-            </section>
-
-            <section class="surface engine-surface">
-              <div class="surface-heading"><div><h2>解析引擎</h2><p>实时检测本机能力。</p></div><a href="/health">查看状态</a></div>
-              <div class="engine-list">
-                <article class="engine-node" data-engine="opendataloader"><span class="node-state"></span><div><h3>OpenDataLoader</h3><p>文本型 PDF · 结构化解析</p></div><small>STRUCTURE</small></article>
-                <article class="engine-node" data-engine="rapidocr"><span class="node-state"></span><div><h3>RapidOCR</h3><p>图片与扫描 PDF · CPU OCR</p></div><small>OCR</small></article>
-                <article class="engine-node" data-engine="pymupdf"><span class="node-state"></span><div><h3>PyMuPDF</h3><p>文本层检测与页面渲染</p></div><small>PDF</small></article>
+            <section class="parse-options" aria-labelledby="parse-options-title">
+              <div class="section-title"><div><h2 id="parse-options-title">解析选项</h2><p>默认配置适用于大多数文档</p></div><button type="button" class="advanced-toggle" id="advanced-toggle" aria-expanded="false" aria-controls="advanced-options"><i class="ph ph-sliders-horizontal" aria-hidden="true"></i><span>更多高级选项</span><i class="ph ph-caret-down" aria-hidden="true"></i></button></div>
+              <div class="option-grid">
+                <label class="field"><span>解析模式</span><select id="parse-engine"><option value="auto">Auto · 自动选择</option><option value="opendataloader">OpenDataLoader</option><option value="rapidocr">RapidOCR</option></select><small>自动识别文档类型并选择最佳策略</small></label>
+                <label class="field"><span>OCR 策略</span><select id="parse-ocr"><option value="auto">Auto · 按需 OCR</option><option value="always">Always · 始终 OCR</option><option value="never">Never · 禁止 OCR</option></select><small>仅在需要时启用 OCR</small></label>
+                <label class="field"><span>扫描精度</span><input type="number" id="parse-dpi" min="72" max="300" value="200"><small>推荐 200–300 DPI</small></label>
+                <fieldset class="format-field" id="parse-formats"><legend>输出格式 <em>*</em></legend><div><label><input type="checkbox" value="text" checked><span>Text</span></label><label><input type="checkbox" value="json" checked><span>JSON</span></label><label><input type="checkbox" value="markdown"><span>Markdown</span></label><label><input type="checkbox" value="html"><span>HTML</span></label></div></fieldset>
               </div>
+              <div class="advanced-options" id="advanced-options" hidden>
+                <label class="field checkbox-field"><span>识别信息</span><span class="check-control"><input type="checkbox" id="parse-bbox" checked><b>返回坐标与置信度</b></span></label>
+                <label class="field checkbox-field"><span>图片资源</span><span class="check-control"><input type="checkbox" id="parse-images"><b>导出图片到阿里云 OSS</b></span></label>
+                <div class="limit-summary"><span>单文件 <b id="limit-upload">—</b></span><span>PDF <b id="limit-pages">—</b></span><span>默认 <b id="limit-dpi">—</b></span><span>保留 <b id="limit-ttl">—</b></span></div>
+              </div>
+              <div class="composer-actions"><p><i class="ph ph-shield-check" aria-hidden="true"></i>本次解析将归属当前账户并自动写入任务记录。</p><button class="primary-action" type="submit" id="parse-submit"><i class="ph ph-play" aria-hidden="true"></i><span>开始解析</span></button></div>
             </section>
-          </div>
+          </form>
 
-          <section class="surface routing-surface">
-            <div class="surface-heading"><div><h2>Auto 路由规则</h2><p><code>engine=auto</code> 根据文件内容选择实际引擎。</p></div><button class="text-action" data-go="guide">查看完整说明</button></div>
-            <div class="routing-grid">
-              <div><span>图片</span><strong>RapidOCR</strong><small>直接 OCR</small></div>
-              <div><span>文本 PDF</span><strong>OpenDataLoader</strong><small>保留结构</small></div>
-              <div><span>扫描 PDF</span><strong>RapidOCR</strong><small>逐页渲染识别</small></div>
-              <div><span>混合 PDF</span><strong>组合解析</strong><small>文本解析 + OCR 补齐</small></div>
-            </div>
+          <section class="recent-section">
+            <div class="section-title"><div><h2>最近任务</h2><p>快速查看最近 5 次解析状态</p></div><button class="text-action" data-go="records">查看全部任务 <i class="ph ph-arrow-right" aria-hidden="true"></i></button></div>
+            <div class="record-table-wrap" tabindex="0" aria-label="最近解析任务，可横向滚动"><table class="record-table"><thead><tr><th>文件名</th><th>模式</th><th>状态</th><th>页数</th><th>耗时</th><th>创建时间</th></tr></thead><tbody id="recent-record-list"></tbody></table></div>
+            <div class="empty-list hidden" id="recent-record-empty">还没有解析任务，上传第一份文档开始吧。</div>
+          </section>
+
+          <section class="result-surface" aria-live="polite">
+            <div class="section-title"><div><h2>解析结果</h2><p>ParseResponse · application/json</p></div><button class="secondary-action" id="copy-result" disabled><i class="ph ph-copy" aria-hidden="true"></i>复制 JSON</button></div>
+            <div class="result-empty" id="result-empty"><i class="ph ph-brackets-curly" aria-hidden="true"></i><strong>等待解析结果</strong><p>提交请求后，响应内容与耗时会显示在这里。</p></div>
+            <div class="result-content hidden" id="result-content"><div class="result-summary" id="result-summary"></div><div class="asset-gallery hidden" id="asset-gallery"></div><pre><code id="result-json"></code></pre></div>
           </section>
         </section>
 
-        <section class="view" id="view-playground" aria-labelledby="playground-title">
-          <header class="page-heading"><div><p class="eyebrow">PLAYGROUND</p><h1 id="playground-title">解析控制台</h1><p>设置输入参数并查看完整 API 响应。</p></div><a class="secondary-action fluid-press" href="/docs#parse">查看接口文档</a></header>
-          <div class="parse-layout">
-            <form class="surface request-sheet" id="parse-form">
-              <div class="surface-heading"><div><h2>请求参数</h2><p><code>POST /v1/parse</code></p></div><span class="required-note">* 必填</span></div>
-              <label class="field"><span>API Key <em>*</em></span><input type="password" id="parse-api-key" autocomplete="off" placeholder="Bearer API Key" required></label>
-              <label class="dropzone" id="dropzone">
-                <input type="file" id="parse-file" accept=".pdf,.png,.jpg,.jpeg,.webp,.tif,.tiff" required>
-                <span class="upload-mark small">FILE</span>
-                <span><strong id="file-label">选择或拖入文档</strong><small>最大 <b id="drop-limit">—</b></small></span>
-              </label>
-              <div class="field-grid">
-                <label class="field"><span>解析引擎</span><select id="parse-engine"><option value="auto">Auto · 自动选择</option><option value="opendataloader">OpenDataLoader</option><option value="rapidocr">RapidOCR</option></select></label>
-                <label class="field"><span>OCR 策略</span><select id="parse-ocr"><option value="auto">Auto · 按需 OCR</option><option value="always">Always · 始终 OCR</option><option value="never">Never · 禁止 OCR</option></select></label>
-                <label class="field"><span>DPI</span><input type="number" id="parse-dpi" min="72" max="300" value="200"></label>
-                <label class="field checkbox-field"><span>识别信息</span><span class="check-control"><input type="checkbox" id="parse-bbox" checked><b>返回坐标与置信度</b></span></label>
-                <label class="field checkbox-field"><span>图片资源</span><span class="check-control"><input type="checkbox" id="parse-images"><b>导出图片到阿里云 OSS</b></span></label>
-              </div>
-              <fieldset class="format-field" id="parse-formats"><legend>输出格式 <em>*</em></legend><div>
-                <label><input type="checkbox" value="text" checked><span>Text</span></label>
-                <label><input type="checkbox" value="json" checked><span>JSON</span></label>
-                <label><input type="checkbox" value="markdown"><span>Markdown</span></label>
-                <label><input type="checkbox" value="html"><span>HTML</span></label>
-              </div></fieldset>
-              <div class="form-footer"><p>API Key 仅保存在当前浏览器标签页。</p><button class="primary-action" type="submit" id="parse-submit">开始解析</button></div>
-            </form>
+        <section class="view" id="view-records" aria-labelledby="records-title">
+          <header class="page-heading"><div><p class="eyebrow">TASK HISTORY</p><h1 id="records-title">最近任务</h1><p>同步与异步任务统一留痕，快速定位成功、处理中和失败记录。</p></div><button class="secondary-action" id="refresh-records"><i class="ph ph-arrows-clockwise" aria-hidden="true"></i>刷新</button></header>
+          <section class="data-surface">
+            <div class="record-table-wrap" tabindex="0" aria-label="解析记录，可横向滚动"><table class="record-table"><thead><tr><th>文件名</th><th>状态</th><th>引擎</th><th>页数</th><th>耗时</th><th>创建时间</th></tr></thead><tbody id="record-list"></tbody></table></div>
+            <div class="empty-list hidden" id="record-empty">还没有解析记录，去解析一份文档吧。</div>
+            <div class="record-pagination"><span id="record-progress">已显示 0 / 0</span><button class="secondary-action hidden" id="load-more-records">加载更多</button></div>
+          </section>
+        </section>
 
-            <section class="surface result-surface" aria-live="polite">
-              <div class="surface-heading"><div><h2>解析结果</h2><p>ParseResponse · application/json</p></div><button class="secondary-action" id="copy-result" disabled>复制 JSON</button></div>
-              <div class="result-empty" id="result-empty"><span>{ }</span><strong>等待解析结果</strong><p>提交请求后，响应内容与耗时会显示在这里。</p></div>
-              <div class="result-content hidden" id="result-content"><div class="result-summary" id="result-summary"></div><div class="asset-gallery hidden" id="asset-gallery"></div><pre><code id="result-json"></code></pre></div>
+        <section class="view" id="view-account" aria-labelledby="account-title">
+          <header class="page-heading"><div><p class="eyebrow">ACCOUNT ACCESS</p><h1 id="account-title">API Keys</h1><p>为服务端、自动化脚本或不同环境创建独立访问凭证。</p></div><button class="primary-action" id="create-key"><i class="ph ph-plus" aria-hidden="true"></i>申请 Key</button></header>
+          <div class="account-guest hidden" id="account-guest"></div>
+          <div class="account-dashboard" id="account-dashboard">
+            <section class="profile-strip">
+              <div class="profile-identity"><span class="profile-avatar" id="profile-avatar">U</span><div><strong id="profile-name">—</strong><small id="profile-email">—</small></div></div>
+              <dl><div><dt>有效 Key</dt><dd id="profile-key-count">0</dd></div><div><dt>解析次数</dt><dd id="profile-record-count">0</dd></div><div><dt>加入时间</dt><dd id="profile-created">—</dd></div></dl>
             </section>
+            <section class="key-surface"><div class="section-title"><div><h2>访问凭证</h2><p>完整 Key 仅在创建时显示一次</p></div></div><div class="key-list" id="key-list"></div></section>
           </div>
         </section>
 
         <section class="view" id="view-configuration" aria-labelledby="config-title">
-          <header class="page-heading"><div><p class="eyebrow">SETTINGS</p><h1 id="config-title">运行配置</h1><p>调整解析限制、任务保留时间与 ONNXRuntime CPU 线程。</p></div></header>
-          <div class="config-layout">
-            <aside class="surface access-panel">
-              <span class="panel-icon">CFG</span><h2>管理员验证</h2><p>运行参数受 API Key 保护。验证后才能读取和修改。</p>
-              <label class="field"><span>API Key</span><input type="password" id="config-api-key" autocomplete="off" placeholder="Bearer API Key"></label>
-              <button class="primary-action wide" id="load-config">验证并读取</button><div class="access-status" id="config-access-status">尚未连接</div>
-            </aside>
-            <form class="surface config-surface locked" id="config-form">
-              <div class="surface-heading"><div><h2>解析参数</h2><p>保存后对新任务生效。</p></div><span class="source-badge" id="config-source">未加载</span></div>
-              <fieldset id="config-fields" disabled>
-                <div class="config-grid">
-                  <label class="field"><span>单文件上限 <em>MB</em></span><input name="max_upload_mb" type="number" min="1" max="500"></label>
-                  <label class="field"><span>PDF 页数上限</span><input name="max_pdf_pages" type="number" min="1" max="500"></label>
-                  <label class="field"><span>默认 DPI</span><input name="default_dpi" type="number" min="72" max="600"></label>
-                  <label class="field"><span>最大 DPI</span><input name="max_dpi" type="number" min="72" max="600"></label>
-                  <label class="field"><span>文本判定阈值 <em>字符</em></span><input name="text_threshold" type="number" min="0" max="10000"></label>
-                  <label class="field"><span>任务超时 <em>秒</em></span><input name="task_time_limit_seconds" type="number" min="30" max="3600"></label>
-                  <label class="field"><span>结果保留 <em>小时</em></span><input name="job_result_ttl_hours" type="number" min="1" max="720"></label>
-                  <label class="field"><span>ONNX intra-op 线程</span><input name="ort_intra_op_num_threads" type="number" min="1" max="64"></label>
-                  <label class="field"><span>ONNX inter-op 线程</span><input name="ort_inter_op_num_threads" type="number" min="1" max="64"></label>
-                </div>
-                <div class="config-note"><strong>生效说明</strong><p>解析限制和 ONNX 线程对新任务即时生效；Celery 硬超时在 Worker 重启后完全生效。</p></div>
-                <div class="form-actions"><button class="secondary-action" type="button" id="reset-config">恢复环境默认值</button><button class="primary-action" type="submit">保存配置</button></div>
-              </fieldset>
-            </form>
-          </div>
+          <header class="page-heading config-heading"><div><p class="eyebrow">ADMIN · RUNTIME POLICY</p><h1 id="config-title">系统运行策略</h1><p>控制新解析任务的安全边界、不同引擎的并发容量，以及结果与 CPU 资源使用。</p></div><button class="secondary-action" id="load-config"><i class="ph ph-arrows-clockwise" aria-hidden="true"></i>刷新状态</button></header>
+          <div class="config-admin-strip"><span class="panel-icon"><i class="ph ph-shield-check" aria-hidden="true"></i></span><div><strong>管理员权限已确认</strong><p><span id="config-admin-name">—</span> 可读取和修改全局运行策略；普通账户不会看到此入口。</p></div><span class="permission-badge">ADMIN</span></div>
+          <form class="config-surface locked" id="config-form"><div class="section-title config-form-heading"><div><h2>策略参数</h2><p id="config-access-status">正在读取当前配置…</p></div><span class="source-badge" id="config-source">加载中</span></div><fieldset id="config-fields" disabled>
+            <section class="config-group" aria-labelledby="config-safety-title"><div class="config-group-intro"><span><i class="ph ph-file-lock" aria-hidden="true"></i></span><div><h3 id="config-safety-title">请求安全边界</h3><p>限制单次请求规模和最长执行时间，避免异常文件长期占用服务资源。</p></div></div><div class="config-grid">
+              <label class="field"><span>单文件上限 <em>MB</em></span><input name="max_upload_mb" type="number" min="1" max="500"></label><label class="field"><span>PDF 页数上限</span><input name="max_pdf_pages" type="number" min="1" max="500"></label><label class="field"><span>任务超时 <em>秒</em></span><input name="task_time_limit_seconds" type="number" min="30" max="3600"></label><label class="field"><span>默认 DPI</span><input name="default_dpi" type="number" min="72" max="600"></label><label class="field"><span>最大 DPI</span><input name="max_dpi" type="number" min="72" max="600"></label><label class="field"><span>文本判定阈值 <em>字符</em></span><input name="text_threshold" type="number" min="0" max="10000"></label>
+            </div></section>
+            <section class="config-group emphasis" aria-labelledby="config-capacity-title"><div class="config-group-intro"><span><i class="ph ph-gauge" aria-hidden="true"></i></span><div><h3 id="config-capacity-title">解析容量与并发</h3><p>OCR 计算更重、OpenDataLoader 更轻量，因此分别限流；两者共享 Worker 总容量。</p></div></div><div class="config-grid">
+              <label class="field"><span>OCR 最大并发</span><input name="ocr_max_concurrency" type="number" min="1" max="32"><small id="ocr-concurrency-state">当前占用 —</small></label><label class="field"><span>OpenDataLoader 最大并发</span><input name="opendataloader_max_concurrency" type="number" min="1" max="32"><small id="odl-concurrency-state">当前占用 —</small></label><label class="field"><span>排队等待上限 <em>秒</em></span><input name="concurrency_wait_seconds" type="number" min="0" max="600"><small>超时返回 429，0 表示不等待</small></label>
+            </div></section>
+            <section class="config-group" aria-labelledby="config-resource-title"><div class="config-group-intro"><span><i class="ph ph-cpu" aria-hidden="true"></i></span><div><h3 id="config-resource-title">结果与 CPU 资源</h3><p>设置异步结果保留周期，以及单个 ONNXRuntime 实例使用的 CPU 线程。</p></div></div><div class="config-grid">
+              <label class="field"><span>结果保留 <em>小时</em></span><input name="job_result_ttl_hours" type="number" min="1" max="720"></label><label class="field"><span>ONNX intra-op 线程</span><input name="ort_intra_op_num_threads" type="number" min="1" max="64"></label><label class="field"><span>ONNX inter-op 线程</span><input name="ort_inter_op_num_threads" type="number" min="1" max="64"></label>
+            </div></section>
+            <div class="config-note"><i class="ph ph-info" aria-hidden="true"></i><p>并发上限保存后立即作用于新任务，但不会超过部署时的 Worker 进程数；Celery 硬超时需要重启 Worker 后完全生效。</p></div><div class="form-actions"><span>修改会影响所有账户的新任务</span><button class="secondary-action" type="button" id="reset-config">恢复环境默认值</button><button class="primary-action" type="submit">保存策略</button></div>
+          </fieldset></form>
         </section>
 
         <section class="view" id="view-guide" aria-labelledby="guide-title">
-          <header class="page-heading"><div><p class="eyebrow">GUIDE</p><h1 id="guide-title">使用指南</h1><p>从服务检查到异步任务的完整接入路径。</p></div><a class="secondary-action fluid-press" href="/docs">打开 API 文档</a></header>
-          <div class="guide-layout">
-            <nav class="guide-rail surface" aria-label="教程章节"><span class="guide-indicator" aria-hidden="true"></span><button class="active" data-guide="health">健康检查</button><button data-guide="sync">同步解析</button><button data-guide="async">异步任务</button><button data-guide="routing">路由策略</button><button data-guide="errors">错误处理</button></nav>
-            <div class="guide-surface surface">
-              <article class="guide-article active" id="guide-health"><span class="article-index">01 · HEALTH</span><h2>先检查服务状态</h2><p>健康接口不需要 API Key，会返回三个核心解析组件的可用状态。</p><pre><code>curl <span class="guide-origin">http://localhost:8080</span>/health</code></pre></article>
-              <article class="guide-article" id="guide-sync"><span class="article-index">02 · SYNC</span><h2>同步解析短文档</h2><p>适合图片和短 PDF。默认自动选择引擎并返回 Text 与 JSON。</p><pre><code>curl -X POST <span class="guide-origin">http://localhost:8080</span>/v1/parse \
+          <header class="page-heading"><div><p class="eyebrow">DEVELOPER GUIDE</p><h1 id="guide-title">使用文档</h1><p>从健康检查到异步任务的完整接入路径。</p></div><a class="primary-action" href="/docs"><i class="ph ph-arrow-square-out" aria-hidden="true"></i>打开完整 API 文档</a></header>
+          <div class="guide-layout"><nav class="guide-rail" aria-label="教程章节"><span class="guide-indicator" aria-hidden="true"></span><button class="active" data-guide="health">健康检查</button><button data-guide="sync">同步解析</button><button data-guide="async">异步任务</button><button data-guide="routing">路由策略</button><button data-guide="errors">错误处理</button></nav><div class="guide-surface">
+            <article class="guide-article active" id="guide-health"><span class="article-index">01 · HEALTH</span><h2>先检查服务状态</h2><p>健康接口无需 API Key，会返回解析组件与数据库可用状态。</p><pre><code>curl <span class="guide-origin">http://localhost:8080</span>/health</code></pre></article>
+            <article class="guide-article" id="guide-sync"><span class="article-index">02 · SYNC</span><h2>同步解析短文档</h2><p>适合图片和短 PDF。会话或 API Key 均可调用。</p><pre><code>curl -X POST <span class="guide-origin">http://localhost:8080</span>/v1/parse \
   -H "Authorization: Bearer &lt;API_KEY&gt;" \
-  -F "file=@resume.pdf" \
-  -F "engine=auto" \
-  -F "include_images=true" \
-  -F "output_formats=text,json,markdown"</code></pre></article>
-              <article class="guide-article" id="guide-async"><span class="article-index">03 · ASYNC</span><h2>异步处理大文档</h2><p>创建任务后轮询状态，成功后读取结果。状态包括 queued、processing、succeeded、failed 和 expired。</p><pre><code>curl -X POST <span class="guide-origin">http://localhost:8080</span>/v1/jobs \
+  -F "file=@resume.pdf"</code></pre></article>
+            <article class="guide-article" id="guide-async"><span class="article-index">03 · ASYNC</span><h2>异步处理大文档</h2><p>创建任务后轮询状态，成功后读取结果。</p><pre><code>curl -X POST <span class="guide-origin">http://localhost:8080</span>/v1/jobs \
   -H "Authorization: Bearer &lt;API_KEY&gt;" \
   -F "file=@scan.pdf"</code></pre></article>
-              <article class="guide-article" id="guide-routing"><span class="article-index">04 · ROUTING</span><h2>Auto 路由策略</h2><div class="routing-list"><div><strong>图片</strong><span>RapidOCR</span></div><div><strong>文本型 PDF</strong><span>OpenDataLoader</span></div><div><strong>扫描 PDF</strong><span>RapidOCR</span></div><div><strong>混合 PDF</strong><span>结构解析 + OCR 补齐</span></div></div><p><code>ocr=always</code> 强制 OCR，<code>ocr=never</code> 禁止 OCR。</p></article>
-              <article class="guide-article" id="guide-errors"><span class="article-index">05 · ERRORS</span><h2>追踪失败请求</h2><p>业务错误包含稳定错误码和 request_id，便于调用方重试和服务端定位。</p><pre><code>{
-  "error": {
-    "code": "FILE_TOO_LARGE",
-    "message": "Uploaded file exceeds 50MB limit",
-    "request_id": "req_..."
-  }
-}</code></pre></article>
-            </div>
-          </div>
+            <article class="guide-article" id="guide-routing"><span class="article-index">04 · ROUTING</span><h2>Auto 路由策略</h2><div class="routing-list"><div><strong>图片</strong><span>RapidOCR</span></div><div><strong>文本型 PDF</strong><span>OpenDataLoader</span></div><div><strong>扫描 PDF</strong><span>RapidOCR</span></div><div><strong>混合 PDF</strong><span>结构解析 + OCR 补齐</span></div></div></article>
+            <article class="guide-article" id="guide-errors"><span class="article-index">05 · ERRORS</span><h2>追踪失败请求</h2><p>业务错误包含稳定错误码和 request_id，便于调用方重试和服务端定位。</p><pre><code>{ "error": { "code": "FILE_TOO_LARGE", "request_id": "req_..." } }</code></pre></article>
+          </div></div>
         </section>
       </main>
     </div>
+
+    <dialog class="modal-dialog" id="key-name-dialog" aria-labelledby="key-name-title"><form class="modal-card" id="key-name-form"><button class="dialog-close" id="key-name-close" type="button" aria-label="关闭"><i class="ph ph-x" aria-hidden="true"></i></button><span class="modal-icon"><i class="ph ph-key" aria-hidden="true"></i></span><h2 id="key-name-title">申请 API Key</h2><p>使用清晰名称区分调用方，例如“生产服务”或“本地脚本”。</p><label class="field"><span>Key 名称</span><input name="name" maxlength="80" value="默认 Key" autocomplete="off" required></label><p class="form-error" id="key-name-error" role="alert"></p><button class="primary-action wide" type="submit">生成 API Key</button></form></dialog>
+    <dialog class="modal-dialog" id="key-dialog"><div class="modal-card key-reveal"><button class="dialog-close" id="key-close" aria-label="关闭"><i class="ph ph-x" aria-hidden="true"></i></button><span class="modal-icon"><i class="ph ph-check-circle" aria-hidden="true"></i></span><h2>API Key 已生成</h2><p>这是唯一一次完整显示，请立即复制并妥善保存。</p><code id="new-key-value"></code><button class="primary-action wide" id="copy-new-key"><i class="ph ph-copy" aria-hidden="true"></i>复制 API Key</button></div></dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="/assets/fluid.js" defer></script>
-    <script src="/assets/app.js" defer></script>
+    <script src="/assets/fluid.js?v=20260802c" defer></script>
+    <script src="/assets/app.js?v=20260802e" defer></script>
   </body>
 </html>

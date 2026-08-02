@@ -26,7 +26,9 @@ class RuntimeConfigStore:
             return None
         try:
             payload = json.loads(self.path.read_text(encoding="utf-8"))
-            return RuntimeConfig.model_validate(payload["values"])
+            values = self.defaults().model_dump()
+            values.update(payload["values"])
+            return RuntimeConfig.model_validate(values)
         except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
             logger.error("runtime_config_invalid path=%s error=%s", self.path, exc)
             return None

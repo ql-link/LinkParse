@@ -13,6 +13,9 @@ class Settings(BaseSettings):
 
     app_name: str = "LinkParse"
     api_keys: Annotated[list[str], NoDecode] = ["change-me"]
+    bootstrap_admin_usernames: Annotated[list[str], NoDecode] = []
+    database_url: str = ""
+    session_ttl_hours: int = Field(default=168, ge=1, le=2160)
     redis_url: str = "redis://localhost:6379/0"
     data_dir: Path = Path("data")
     max_upload_mb: int = 50
@@ -21,6 +24,9 @@ class Settings(BaseSettings):
     max_dpi: int = 300
     text_threshold: int = 50
     task_time_limit_seconds: int = 300
+    ocr_max_concurrency: int = Field(default=1, ge=1, le=32)
+    opendataloader_max_concurrency: int = Field(default=3, ge=1, le=32)
+    concurrency_wait_seconds: int = Field(default=30, ge=0, le=600)
     job_result_ttl_hours: int = 24
     cleanup_interval_minutes: int = Field(default=60, ge=5, le=1440)
     oss_endpoint: str = ""
@@ -34,9 +40,23 @@ class Settings(BaseSettings):
     ort_intra_op_num_threads: int = 3
     ort_inter_op_num_threads: int = 1
 
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def normalize_database_url(cls, value: object) -> object:
+        if isinstance(value, str) and value.startswith("mysql://"):
+            return value.replace("mysql://", "mysql+pymysql://", 1)
+        return value
+
     @field_validator("api_keys", mode="before")
     @classmethod
     def split_api_keys(cls, value: object) -> object:
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return value
+
+    @field_validator("bootstrap_admin_usernames", mode="before")
+    @classmethod
+    def split_bootstrap_admin_usernames(cls, value: object) -> object:
         if isinstance(value, str):
             return [item.strip() for item in value.split(",") if item.strip()]
         return value

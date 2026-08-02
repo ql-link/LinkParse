@@ -12,3 +12,12 @@ class EngineUnavailable(LinkParseError):
         if detail:
             message = f"{message}: {detail}"
         super().__init__("ENGINE_UNAVAILABLE", message, 503)
+
+
+class ConcurrencyLimitReached(LinkParseError):
+    def __init__(self, engine: str) -> None:
+        super().__init__(
+            "CONCURRENCY_LIMIT_REACHED",
+            f"{engine} is busy; retry later",
+            429,
+        )
