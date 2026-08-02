@@ -19,6 +19,7 @@ def test_console_is_available_with_security_headers():
     assert 'id="auth-dialog"' not in response.text
     assert 'class="dock-item admin-only hidden" data-view="configuration"' in response.text
     assert 'id="config-api-key"' not in response.text
+    assert 'src="/assets/clipboard.js' in response.text
     assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
 
 
@@ -27,8 +28,16 @@ def test_custom_api_documentation_replaces_swagger():
     assert response.status_code == 200
     assert "LinkParse API · 接入文档" in response.text
     assert 'class="auth-pending"' in response.text
+    assert 'src="/assets/clipboard.js' in response.text
     assert "swagger-ui" not in response.text.lower()
     assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
+
+
+def test_clipboard_helper_has_http_compatible_fallback():
+    response = client.get("/assets/clipboard.js")
+    assert response.status_code == 200
+    assert 'navigator.clipboard?.writeText' in response.text
+    assert 'document.execCommand("copy")' in response.text
 
 
 def test_openapi_schema_remains_available_for_tooling():

@@ -71,14 +71,12 @@ function showDocsToast(message) {
 }
 
 async function writeClipboard(value, successMessage) {
-  try {
-    await navigator.clipboard.writeText(value);
+  if (await window.LinkParseClipboard.copyText(value)) {
     showDocsToast(successMessage);
     return true;
-  } catch {
-    showDocsToast("浏览器未授予剪贴板权限");
-    return false;
   }
+  showDocsToast("复制失败，请手动选择并复制");
+  return false;
 }
 
 async function copyExample(id, button) {

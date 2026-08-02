@@ -687,20 +687,18 @@ function bindInteractions() {
   $("#load-more-records").addEventListener("click", () => loadRecords(true));
   $("#key-close").addEventListener("click", () => $("#key-dialog").close());
   $("#copy-new-key").addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText($("#new-key-value").textContent);
+    if (await window.LinkParseClipboard.copyText($("#new-key-value").textContent)) {
       showToast("API Key 已复制");
-    } catch {
-      showToast("浏览器未授予剪贴板权限", true);
+    } else {
+      showToast("复制失败，请手动选择并复制", true);
     }
   });
   $("#copy-result").addEventListener("click", async () => {
     if (!state.lastResult) return;
-    try {
-      await navigator.clipboard.writeText(JSON.stringify(state.lastResult, null, 2));
+    if (await window.LinkParseClipboard.copyText(JSON.stringify(state.lastResult, null, 2))) {
       showToast("结果已复制");
-    } catch {
-      showToast("浏览器未授予剪贴板权限", true);
+    } else {
+      showToast("复制失败，请手动选择并复制", true);
     }
   });
 
