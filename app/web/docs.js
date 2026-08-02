@@ -1,5 +1,25 @@
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
+async function requireSession() {
+  const token = sessionStorage.getItem("linkparse_session_token");
+  if (!token) {
+    location.replace("/");
+    return false;
+  }
+  try {
+    const response = await fetch("/v1/auth/me", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) throw new Error("session expired");
+    document.documentElement.classList.remove("auth-pending");
+    return true;
+  } catch {
+    sessionStorage.removeItem("linkparse_session_token");
+    location.replace("/");
+    return false;
+  }
+}
+
 const formatExamples = {
   markdown: {
     path: "outputs.markdown",
@@ -124,7 +144,8 @@ async function loadStatus() {
   }
 }
 
-function initializeDocs() {
+async function initializeDocs() {
+  if (!await requireSession()) return;
   document.querySelector("#base-url").textContent = location.origin;
   $$(".origin-token").forEach((node) => { node.textContent = location.origin; });
   $$(".copy-code").forEach((button) => {

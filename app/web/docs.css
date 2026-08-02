@@ -8,30 +8,31 @@
   --gray-600: #8a8a8e;
   --gray-700: #6e6e73;
   --gray-800: #48484a;
-  --ink: #1d1d1f;
-  --canvas: var(--gray-050);
+  --ink: #0f1f38;
+  --canvas: #f7f9fc;
   --surface: #fff;
-  --muted: var(--gray-700);
-  --line: var(--gray-200);
-  --line-strong: var(--gray-300);
-  --blue: #3478f6;
-  --blue-soft: rgba(52,120,246,.09);
-  --green: #34c759;
-  --red: #ff3b30;
-  --code: #1c1c1e;
+  --muted: #65738a;
+  --line: #e4e9f1;
+  --line-strong: #d6deea;
+  --blue: #2868e8;
+  --blue-soft: #eef4ff;
+  --green: #1aa765;
+  --red: #df4553;
+  --code: #0d1b30;
   --radius-sm: 8px;
   --radius-md: 10px;
   --radius-lg: 14px;
   --shadow-sm: 0 1px 2px rgba(0,0,0,.04);
   --shadow-md: 0 8px 30px rgba(0,0,0,.1);
-  --ui-font: -apple-system, BlinkMacSystemFont, Inter, "Segoe UI", Roboto, sans-serif;
+  --ui-font: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
   --mono-font: "SFMono-Regular", "Cascadia Code", Consolas, monospace;
   font-family: var(--ui-font);
 }
 
 * { box-sizing: border-box; }
+.auth-pending body { visibility: hidden; }
 html { scroll-padding-top: 94px; }
-body { background: var(--canvas); color: var(--ink); margin: 0; min-width: 1100px; }
+body { background: var(--canvas); color: var(--ink); margin: 0; min-width: 960px; }
 a { color: inherit; text-decoration: none; }
 button, select { color: inherit; font: inherit; }
 code, pre { font-family: var(--mono-font); }
@@ -40,7 +41,7 @@ button:focus-visible, a:focus-visible, select:focus-visible { outline: 2px solid
 
 .docs-bar { align-items: center; background: rgba(255,255,255,.9); border-bottom: 1px solid var(--line); display: flex; height: 72px; justify-content: space-between; left: 0; padding: 0 25px; position: fixed; right: 0; top: 0; z-index: 30; }
 .docs-brand { align-items: center; display: inline-flex; gap: 11px; }
-.brand-symbol { align-items: center; background: var(--ink); border-radius: 10px; color: white; display: flex; font-size: 10px; font-weight: 800; height: 36px; justify-content: center; width: 36px; }
+.brand-symbol { align-items: center; background: var(--blue); border-radius: 10px; color: white; display: flex; font-size: 10px; font-weight: 800; height: 36px; justify-content: center; width: 36px; }
 .docs-brand strong, .docs-brand small { display: block; }
 .docs-brand strong { font-size: 14px; font-weight: 650; letter-spacing: -.015em; }
 .docs-brand small { color: var(--muted); font-size: 10px; margin-top: 3px; }

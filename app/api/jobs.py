@@ -8,8 +8,10 @@ from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 
 from app.core.config import Settings, get_effective_settings
 from app.core.errors import LinkParseError
-from app.core.security import authenticate
+from app.core.security import AuthContext, authenticate
+from app.db import Database, get_database
 from app.schemas.models import EngineName, JobResponse, OcrMode, ParseResponse
+from app.services.parse_records import create_parse_record, record_owned_by, update_parse_record
 from app.services.parser import parse_formats
 from app.services.result_store import ResultStore
 from app.services.uploads import save_upload
@@ -21,6 +23,8 @@ logger = logging.getLogger("linkparse.jobs")
 @router.post("", response_model=JobResponse, status_code=202)
 async def create_job(
     request: Request,
+    auth: Annotated[AuthContext, Depends(authenticate)],
+    database: Annotated[Database, Depends(get_database)],
     settings: Annotated[Settings, Depends(get_effective_settings)],
     file: Annotated[UploadFile, File()],
     engine: Annotated[EngineName, Form()] = "auto",
@@ -36,18 +40,30 @@ async def create_job(
         raise LinkParseError(
             "INVALID_ARGUMENT", f"dpi must be between 72 and {settings.max_dpi}", 422
         )
+    formats = parse_formats(output_formats)
     path = settings.data_dir / "uploads" / job_id
     path, media_type, filename, size = await save_upload(
         file, path, settings.max_upload_mb * 1024 * 1024
     )
-    formats = parse_formats(output_formats)
     payload = {
         "job_id": job_id,
         "status": "queued",
         "progress": {"current_page": 0, "total_pages": 0},
     }
-    ResultStore(settings).write(job_id, payload)
+    store = ResultStore(settings)
+    record_id = None
     try:
+        record_id = create_parse_record(
+            database,
+            auth,
+            request_id=getattr(request.state, "request_id", job_id),
+            job_id=job_id,
+            filename=filename,
+            mode="async",
+            engine=engine,
+            status="queued",
+        )
+        store.write(job_id, payload)
         from app.workers.tasks import parse_document
 
         parse_document.delay(
@@ -62,18 +78,36 @@ async def create_job(
                 "dpi": effective_dpi,
                 "include_bbox": include_bbox,
                 "include_images": include_images,
+                "record_id": record_id,
             },
         )
+    except LinkParseError:
+        path.unlink(missing_ok=True)
+        store.delete(job_id)
+        raise
     except Exception as exc:
         path.unlink(missing_ok=True)
-        ResultStore(settings).write(
-            job_id,
-            {
-                "job_id": job_id,
-                "status": "failed",
-                "progress": {},
-                "error": {"code": "ENGINE_UNAVAILABLE", "message": "Task queue is unavailable"},
-            },
+        try:
+            store.write(
+                job_id,
+                {
+                    "job_id": job_id,
+                    "status": "failed",
+                    "progress": {},
+                    "error": {
+                        "code": "ENGINE_UNAVAILABLE",
+                        "message": "Task queue is unavailable",
+                    },
+                },
+            )
+        except Exception:
+            logger.exception("job_failure_state_write_failed job_id=%s", job_id)
+        update_parse_record(
+            database,
+            record_id,
+            status="failed",
+            error_code="ENGINE_UNAVAILABLE",
+            error_message="Task queue is unavailable",
         )
         raise LinkParseError("ENGINE_UNAVAILABLE", "Task queue is unavailable", 503) from exc
     logger.info(
@@ -89,7 +123,14 @@ async def create_job(
 
 
 @router.get("/{job_id}", response_model=JobResponse)
-def get_job(job_id: str, settings: Annotated[Settings, Depends(get_effective_settings)]) -> dict:
+def get_job(
+    job_id: str,
+    auth: Annotated[AuthContext, Depends(authenticate)],
+    database: Annotated[Database, Depends(get_database)],
+    settings: Annotated[Settings, Depends(get_effective_settings)],
+) -> dict:
+    if database.configured and not record_owned_by(database, job_id, auth):
+        raise LinkParseError("JOB_NOT_FOUND", "Job not found", 404)
     payload = ResultStore(settings).read(job_id)
     if payload is None:
         raise LinkParseError("JOB_NOT_FOUND", "Job not found", 404)
@@ -98,8 +139,13 @@ def get_job(job_id: str, settings: Annotated[Settings, Depends(get_effective_set
 
 @router.get("/{job_id}/result", response_model=ParseResponse)
 def get_job_result(
-    job_id: str, settings: Annotated[Settings, Depends(get_effective_settings)]
+    job_id: str,
+    auth: Annotated[AuthContext, Depends(authenticate)],
+    database: Annotated[Database, Depends(get_database)],
+    settings: Annotated[Settings, Depends(get_effective_settings)],
 ) -> dict:
+    if database.configured and not record_owned_by(database, job_id, auth):
+        raise LinkParseError("JOB_NOT_FOUND", "Job not found", 404)
     payload = ResultStore(settings).read(job_id)
     if payload is None:
         raise LinkParseError("JOB_NOT_FOUND", "Job not found", 404)

@@ -8,6 +8,7 @@ from app.core.errors import EngineUnavailable, LinkParseError
 from app.engines.opendataloader_engine import OpenDataLoaderEngine
 from app.engines.rapidocr_engine import RapidOCREngine
 from app.services.assets import OssAssetStorage
+from app.services.concurrency import ConcurrencyLimiter
 from app.services.format_convert import fill_missing_outputs, outputs_from_pages
 from app.services.pdf import PdfInfo, inspect_pdf, render_pdf
 
@@ -24,15 +25,31 @@ def parse_formats(value: str) -> set[str]:
 
 class DocumentParser:
     def __init__(
-        self, settings: Settings, asset_storage: OssAssetStorage | None = None
+        self,
+        settings: Settings,
+        asset_storage: OssAssetStorage | None = None,
+        concurrency_limiter: ConcurrencyLimiter | None = None,
     ) -> None:
         self.settings = settings
-        self.ocr = RapidOCREngine(
-            intra_op_num_threads=settings.ort_intra_op_num_threads,
-            inter_op_num_threads=settings.ort_inter_op_num_threads,
-        )
-        self.structured = OpenDataLoaderEngine()
+        self._ocr: RapidOCREngine | None = None
+        self._structured: OpenDataLoaderEngine | None = None
         self.asset_storage = asset_storage or OssAssetStorage(settings)
+        self.concurrency_limiter = concurrency_limiter or ConcurrencyLimiter(settings)
+
+    @property
+    def ocr(self) -> RapidOCREngine:
+        if self._ocr is None:
+            self._ocr = RapidOCREngine(
+                intra_op_num_threads=self.settings.ort_intra_op_num_threads,
+                inter_op_num_threads=self.settings.ort_inter_op_num_threads,
+            )
+        return self._ocr
+
+    @property
+    def structured(self) -> OpenDataLoaderEngine:
+        if self._structured is None:
+            self._structured = OpenDataLoaderEngine()
+        return self._structured
 
     def parse(
         self,
@@ -121,9 +138,10 @@ class DocumentParser:
         return "rapidocr" if info.detected_type == "scanned_pdf" else "opendataloader"
 
     def _ocr_image(self, path: Path, page: int, include_bbox: bool) -> dict:
-        if not self.ocr.available():
-            raise EngineUnavailable("rapidocr")
-        return self.ocr.parse_image(path, page, include_bbox)
+        with self.concurrency_limiter.slot("rapidocr"):
+            if not self.ocr.available():
+                raise EngineUnavailable("rapidocr")
+            return self.ocr.parse_image(path, page, include_bbox)
 
     def _ocr_pdf(
         self,
@@ -177,9 +195,10 @@ class DocumentParser:
         output_dir = self.settings.data_dir / "tmp" / f"{path.stem}_odl"
         assets: list[dict] = []
         try:
-            outputs, image_paths = self.structured.parse(
-                path, output_dir, formats, include_images
-            )
+            with self.concurrency_limiter.slot("opendataloader"):
+                outputs, image_paths = self.structured.parse(
+                    path, output_dir, formats, include_images
+                )
             outputs = fill_missing_outputs(outputs, formats)
             if include_images:
                 image_pages = self._image_pages(outputs.get("json"))

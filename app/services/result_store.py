@@ -65,6 +65,9 @@ class ResultStore:
         temporary.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         os.replace(temporary, path)
 
+    def delete(self, job_id: str) -> None:
+        self._path(job_id).unlink(missing_ok=True)
+
     def read(self, job_id: str) -> dict[str, Any] | None:
         path = self._path(job_id)
         if not path.exists():

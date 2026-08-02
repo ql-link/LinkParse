@@ -36,6 +36,11 @@ def service_info(settings: Annotated[Settings, Depends(get_effective_settings)])
             "default_dpi": settings.default_dpi,
             "max_dpi": settings.max_dpi,
             "result_ttl_hours": settings.job_result_ttl_hours,
+            "concurrency": {
+                "rapidocr": settings.ocr_max_concurrency,
+                "opendataloader": settings.opendataloader_max_concurrency,
+                "wait_seconds": settings.concurrency_wait_seconds,
+            },
         },
         "endpoints": {
             "sync": "/v1/parse",

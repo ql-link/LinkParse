@@ -2,6 +2,7 @@ import logging
 import re
 import time
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -9,28 +10,39 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api import admin, health, info, jobs, parse
+from app.api import account, admin, auth, health, info, jobs, parse
 from app.core.config import get_settings
 from app.core.errors import LinkParseError
 from app.core.logging import configure_logging
+from app.db import database_for_url
 
 settings = get_settings()
 configure_logging(settings.log_level)
 settings.ensure_directories()
 logger = logging.getLogger("linkparse")
 
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    if settings.database_url:
+        database_for_url(settings.database_url).initialize()
+    yield
+
+
 app = FastAPI(
     title="LinkParse Document Parsing API",
     version="0.2.0",
     docs_url=None,
     redoc_url=None,
+    lifespan=lifespan,
 )
 app.include_router(health.router)
 app.include_router(info.router)
+app.include_router(auth.router)
+app.include_router(account.router)
 app.include_router(parse.router)
 app.include_router(jobs.router)
 app.include_router(admin.router)
-
 WEB_DIR = Path(__file__).parent / "web"
 app.mount("/assets", StaticFiles(directory=WEB_DIR), name="assets")
 
@@ -69,6 +81,7 @@ def api_documentation() -> FileResponse:
             "Referrer-Policy": "no-referrer",
         },
     )
+
 
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 

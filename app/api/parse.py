@@ -4,11 +4,15 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from starlette.concurrency import run_in_threadpool
 
 from app.core.config import Settings, get_effective_settings
-from app.core.security import authenticate
+from app.core.errors import LinkParseError
+from app.core.security import AuthContext, authenticate
+from app.db import Database, get_database
 from app.schemas.models import EngineName, OcrMode, ParseResponse
 from app.services.assets import OssAssetStorage
+from app.services.parse_records import create_parse_record, update_parse_record
 from app.services.parser import DocumentParser, parse_formats
 from app.services.result_store import ResultStore
 from app.services.uploads import save_upload
@@ -20,6 +24,8 @@ logger = logging.getLogger("linkparse.parse")
 @router.post("/parse", response_model=ParseResponse)
 async def parse_document(
     request: Request,
+    auth: Annotated[AuthContext, Depends(authenticate)],
+    database: Annotated[Database, Depends(get_database)],
     settings: Annotated[Settings, Depends(get_effective_settings)],
     file: Annotated[UploadFile, File()],
     engine: Annotated[EngineName, Form()] = "auto",
@@ -35,8 +41,19 @@ async def parse_document(
     temporary, media_type, filename, size = await save_upload(
         file, temporary, settings.max_upload_mb * 1024 * 1024
     )
+    record_id = None
     try:
-        result = DocumentParser(settings).parse(
+        record_id = create_parse_record(
+            database,
+            auth,
+            request_id=request_id,
+            job_id=None,
+            filename=filename,
+            mode="sync",
+            engine=engine,
+        )
+        result = await run_in_threadpool(
+            DocumentParser(settings).parse,
             temporary,
             filename,
             media_type,
@@ -67,6 +84,33 @@ async def parse_document(
             len(result["assets"]),
             result["meta"]["duration_ms"],
         )
+        update_parse_record(
+            database,
+            record_id,
+            status="succeeded",
+            engine=result["engine"],
+            detected_type=result["detected_type"],
+            page_count=result["meta"]["page_count"],
+            duration_ms=result["meta"]["duration_ms"],
+        )
         return result
+    except LinkParseError as exc:
+        update_parse_record(
+            database,
+            record_id,
+            status="failed",
+            error_code=exc.code,
+            error_message=exc.message,
+        )
+        raise
+    except Exception:
+        update_parse_record(
+            database,
+            record_id,
+            status="failed",
+            error_code="INTERNAL_ERROR",
+            error_message="Document parsing failed",
+        )
+        raise
     finally:
         Path(temporary).unlink(missing_ok=True)
