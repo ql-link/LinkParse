@@ -126,6 +126,12 @@ docker compose --project-directory "${deploy_dir}" \
   -f "${deploy_dir}/docker-compose.yml" \
   up -d --no-build --remove-orphans
 
+# Nginx resolves the API service name when it starts. Refresh it after the API
+# container is recreated so the proxy cannot retain the previous container IP.
+docker compose --project-directory "${deploy_dir}" \
+  -f "${deploy_dir}/docker-compose.yml" \
+  restart nginx
+
 for _ in $(seq 1 45); do
   health_status="$(docker inspect --format='{{.State.Health.Status}}' linkparse-api-1 2>/dev/null || true)"
   if [[ "${health_status}" == "healthy" ]] && \
