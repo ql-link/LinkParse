@@ -1,7 +1,7 @@
 # LinkParse
 
-纯 CPU 文档解析服务。文本型 PDF 使用 OpenDataLoader，图片和扫描型 PDF 使用
-RapidOCR + ONNXRuntime，PyMuPDF 负责 PDF 检测与页面渲染。
+纯 CPU 文档解析服务。PDF 统一使用 OpenDataLoader + 按页 RapidOCR 管线：先由
+OpenDataLoader 生成带页码来源的结构化结果，再通过质量门禁选择需要 OCR 的页面。
 
 ## 能力
 
@@ -20,7 +20,10 @@ RapidOCR + ONNXRuntime，PyMuPDF 负责 PDF 检测与页面渲染。
 - 可选导出 PDF 内嵌图片、OCR 页面图或原始图片到阿里云 OSS，并在 `assets` 返回 URL
 - 独立用户 API Key、解析记录归属、魔数文件检测、大小/页数/DPI 限制和统一错误码
 - Redis 分布式并发控制，分别限制 RapidOCR 与 OpenDataLoader 的执行数量
-- OpenDataLoader 失败时，`engine=auto` 自动降级到 RapidOCR
+- PDF 只有一条 `opendataloader_ocr` 管线，不暴露互斥引擎和强制 OCR 开关
+- 文本 PDF 通常无需 OCR，扫描 PDF 通常逐页 OCR，混合 PDF 只 OCR 问题页
+- OpenDataLoader 在独立子进程中运行，带解析超时、输出文件数/体积和日志体积保护
+- Markdown 保留 `ODL_PAGE` 页码来源，并在 `meta.pdf.structure` 返回表格及页面溯源信息
 
 ## 本地运行
 
@@ -95,6 +98,13 @@ UPDATE users SET is_admin = TRUE WHERE username = 'root';
 时的总容量上限，修改它需要重启 Worker。
 
 `LINKPARSE_CONCURRENCY_WAIT_SECONDS` 控制同步请求等待槽位的时间，超时返回 HTTP 429。
+
+OpenDataLoader 默认解析时限为 300 秒，最多生成 2000 个文件、512 MB 中间结果；可通过
+`LINKPARSE_OPENDATALOADER_TIMEOUT_SECONDS`、`LINKPARSE_OPENDATALOADER_MAX_OUTPUT_FILES`
+和 `LINKPARSE_OPENDATALOADER_MAX_OUTPUT_MB` 调整。表格策略默认为 `default`，可将
+`LINKPARSE_OPENDATALOADER_TABLE_METHOD` 设为 `cluster`；复杂合并单元格需要保留 HTML 时，
+设置 `LINKPARSE_OPENDATALOADER_MARKDOWN_WITH_HTML=true`。这些解析管线参数通过环境变量配置，
+修改后需要重启 API 和 Worker。
 异步任务遇到满载时不会失败，而是保持 `queued` 并自动重新排队。Redis 不可用时服务会
 保守拒绝新的同步解析，并让异步任务稍后重试，避免退化为各进程独立计数后突破全局并发上限。
 
@@ -104,11 +114,8 @@ UPDATE users SET is_admin = TRUE WHERE username = 'root';
 curl -X POST http://localhost:8080/v1/parse \
   -H 'Authorization: Bearer change-me' \
   -F 'file=@resume.pdf' \
-  -F 'engine=auto' \
   -F 'output_formats=text,json,markdown,html' \
-  -F 'ocr=auto' \
-  -F 'include_images=true' \
-  -F 'dpi=200'
+  -F 'include_images=true'
 ```
 
 异步任务：
@@ -119,16 +126,20 @@ curl -X POST http://localhost:8080/v1/jobs \
   -F 'file=@scan.pdf'
 ```
 
-## 路由规则
+## PDF 解析管线
 
-| 输入 | 默认引擎 |
+| 输入 | 同一管线内的实际行为 |
 |---|---|
 | 图片 | RapidOCR |
-| 全文本 PDF | OpenDataLoader |
-| 扫描 PDF | PyMuPDF 渲染 + RapidOCR |
-| 混合 PDF | OpenDataLoader；失败时 RapidOCR 兜底 |
+| 全文本 PDF | OpenDataLoader 主结果通过质量门禁，OCR 页数通常为 0 |
+| 扫描 PDF | OpenDataLoader 保留页面来源，问题页经 PyMuPDF 渲染后由 RapidOCR 补齐 |
+| 混合 PDF | OpenDataLoader 保留整体结构，仅对质量门禁选中的页面执行 RapidOCR |
 
-`ocr=always` 强制 OCR，`ocr=never` 禁止自动 OCR。显式指定引擎时，如果该引擎失败不会静默降级。
+OpenDataLoader 的 Markdown 每页包含 `<!-- ODL_PAGE:n -->` 标记。响应的 `meta.pdf` 会给出
+初始/最终质量报告、实际 OCR 页、解析器耗时/输出资源统计，以及 `structure.tables` 中的
+Markdown/HTML 表格矩阵和来源页。OCR 文本以 `PAGE_FALLBACK:OCR` 标记追加在对应的
+OpenDataLoader 页面内；OpenDataLoader 原文不会被覆盖。页码来源不完整、OCR 置信度不足或补齐后
+仍未通过质量门禁时，解析会明确失败，不返回表面成功但内容不完整的结果。
 
 ## 数据保留
 

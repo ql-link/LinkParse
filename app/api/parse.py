@@ -10,7 +10,7 @@ from app.core.config import Settings, get_effective_settings
 from app.core.errors import LinkParseError
 from app.core.security import AuthContext, authenticate
 from app.db import Database, get_database
-from app.schemas.models import EngineName, OcrMode, ParseResponse
+from app.schemas.models import ParseResponse
 from app.services.assets import OssAssetStorage
 from app.services.parse_records import create_parse_record, update_parse_record
 from app.services.parser import DocumentParser, parse_formats
@@ -28,15 +28,11 @@ async def parse_document(
     database: Annotated[Database, Depends(get_database)],
     settings: Annotated[Settings, Depends(get_effective_settings)],
     file: Annotated[UploadFile, File()],
-    engine: Annotated[EngineName, Form()] = "auto",
     output_formats: Annotated[str, Form()] = "text,json",
-    ocr: Annotated[OcrMode, Form()] = "auto",
-    dpi: Annotated[int | None, Form()] = None,
     include_bbox: Annotated[bool, Form()] = True,
     include_images: Annotated[bool, Form()] = False,
 ) -> dict:
     request_id = getattr(request.state, "request_id", f"req_{uuid.uuid4().hex}")
-    effective_dpi = dpi if dpi is not None else settings.default_dpi
     temporary = settings.data_dir / "uploads" / request_id
     temporary, media_type, filename, size = await save_upload(
         file, temporary, settings.max_upload_mb * 1024 * 1024
@@ -50,17 +46,14 @@ async def parse_document(
             job_id=None,
             filename=filename,
             mode="sync",
-            engine=engine,
+            engine="opendataloader_ocr",
         )
         result = await run_in_threadpool(
             DocumentParser(settings).parse,
             temporary,
             filename,
             media_type,
-            engine,
             parse_formats(output_formats),
-            ocr,
-            effective_dpi,
             include_bbox,
             include_images,
             request_id,

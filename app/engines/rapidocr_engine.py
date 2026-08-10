@@ -77,11 +77,17 @@ class RapidOCREngine:
                 width, height = image.size
             result = self._get_engine()(str(path))
             blocks = self._normalise(result, include_bbox)
+            confidence = (
+                round(sum(block["confidence"] for block in blocks) / len(blocks), 6)
+                if blocks
+                else None
+            )
             return {
                 "page": page,
                 "width": width,
                 "height": height,
                 "text": "\n".join(block["text"] for block in blocks),
+                "confidence": confidence,
                 "blocks": blocks,
             }
         except Exception as exc:

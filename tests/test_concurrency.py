@@ -56,8 +56,15 @@ class FakeOcr:
 
 
 class FakeStructured:
+    image_pages = {}
+    last_metadata = {}
+
     def parse(self, _path, _output_dir, _formats, _include_images):
-        return {"text": "structured"}, []
+        return {
+            "text": "structured",
+            "markdown": "<!-- ODL_PAGE:1 -->\n\nstructured",
+            "json": {},
+        }, []
 
 
 def test_distributed_limits_are_independent_and_release_slots(tmp_path):
@@ -107,13 +114,17 @@ def test_parser_uses_separate_slots_for_ocr_and_opendataloader(tmp_path):
     image_path.write_bytes(b"image")
 
     assert parser._ocr_image(image_path, 1, True)["text"] == "ok"
-    outputs, _ = parser._parse_structured_with_fallback(
+    parser._analyze_quality = lambda *_args, **_kwargs: {
+        "status": "PASSED",
+        "page_provenance_valid": True,
+        "ocr_required_pages": [],
+    }
+    outputs, _ = parser._parse_pdf_pipeline(
         image_path,
         {"text"},
-        200,
         True,
-        False,
         None,
+        page_count=1,
     )
 
     assert outputs["text"] == "structured"

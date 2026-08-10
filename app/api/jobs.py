@@ -10,7 +10,7 @@ from app.core.config import Settings, get_effective_settings
 from app.core.errors import LinkParseError
 from app.core.security import AuthContext, authenticate
 from app.db import Database, get_database
-from app.schemas.models import EngineName, JobResponse, OcrMode, ParseResponse
+from app.schemas.models import JobResponse, ParseResponse
 from app.services.parse_records import create_parse_record, record_owned_by, update_parse_record
 from app.services.parser import parse_formats
 from app.services.result_store import ResultStore
@@ -27,19 +27,11 @@ async def create_job(
     database: Annotated[Database, Depends(get_database)],
     settings: Annotated[Settings, Depends(get_effective_settings)],
     file: Annotated[UploadFile, File()],
-    engine: Annotated[EngineName, Form()] = "auto",
     output_formats: Annotated[str, Form()] = "text,json",
-    ocr: Annotated[OcrMode, Form()] = "auto",
-    dpi: Annotated[int | None, Form()] = None,
     include_bbox: Annotated[bool, Form()] = True,
     include_images: Annotated[bool, Form()] = False,
 ) -> dict:
     job_id = f"job_{uuid.uuid4().hex}"
-    effective_dpi = dpi if dpi is not None else settings.default_dpi
-    if effective_dpi < 72 or effective_dpi > settings.max_dpi:
-        raise LinkParseError(
-            "INVALID_ARGUMENT", f"dpi must be between 72 and {settings.max_dpi}", 422
-        )
     formats = parse_formats(output_formats)
     path = settings.data_dir / "uploads" / job_id
     path, media_type, filename, size = await save_upload(
@@ -60,7 +52,7 @@ async def create_job(
             job_id=job_id,
             filename=filename,
             mode="async",
-            engine=engine,
+            engine="opendataloader_ocr",
             status="queued",
         )
         store.write(job_id, payload)
@@ -72,10 +64,7 @@ async def create_job(
                 "path": str(path),
                 "filename": filename,
                 "media_type": media_type,
-                "engine": engine,
                 "formats": sorted(formats),
-                "ocr_mode": ocr,
-                "dpi": effective_dpi,
                 "include_bbox": include_bbox,
                 "include_images": include_images,
                 "record_id": record_id,
