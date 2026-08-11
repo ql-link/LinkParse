@@ -1,9 +1,7 @@
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
-EngineName = Literal["auto", "opendataloader", "rapidocr"]
-OcrMode = Literal["auto", "always", "never"]
 JobStatus = Literal["queued", "processing", "succeeded", "failed", "expired"]
 AssetKind = Literal["embedded_image", "page_image", "source_image"]
 
@@ -11,6 +9,7 @@ AssetKind = Literal["embedded_image", "page_image", "source_image"]
 class ParseMeta(BaseModel):
     page_count: int
     duration_ms: int
+    pdf: dict[str, Any] | None = None
 
 
 class ParseAsset(BaseModel):
@@ -49,9 +48,6 @@ class JobResponse(BaseModel):
 class RuntimeConfig(BaseModel):
     max_upload_mb: int = Field(ge=1, le=500)
     max_pdf_pages: int = Field(ge=1, le=500)
-    default_dpi: int = Field(ge=72, le=600)
-    max_dpi: int = Field(ge=72, le=600)
-    text_threshold: int = Field(ge=0, le=10_000)
     task_time_limit_seconds: int = Field(ge=30, le=3600)
     ocr_max_concurrency: int = Field(ge=1, le=32)
     opendataloader_max_concurrency: int = Field(ge=1, le=32)
@@ -59,9 +55,3 @@ class RuntimeConfig(BaseModel):
     job_result_ttl_hours: int = Field(ge=1, le=720)
     ort_intra_op_num_threads: int = Field(ge=1, le=64)
     ort_inter_op_num_threads: int = Field(ge=1, le=64)
-
-    @model_validator(mode="after")
-    def validate_dpi_range(self) -> "RuntimeConfig":
-        if self.default_dpi > self.max_dpi:
-            raise ValueError("default_dpi cannot exceed max_dpi")
-        return self

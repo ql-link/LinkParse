@@ -19,6 +19,10 @@ def test_console_is_available_with_security_headers():
     assert 'id="auth-dialog"' not in response.text
     assert 'class="dock-item admin-only hidden" data-view="configuration"' in response.text
     assert 'id="config-api-key"' not in response.text
+    assert 'id="parse-engine"' not in response.text
+    assert 'id="parse-ocr"' not in response.text
+    assert 'id="parse-dpi"' not in response.text
+    assert "OpenDataLoader + 按页 OCR" in response.text
     assert 'src="/assets/clipboard.js' in response.text
     assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
 
@@ -36,21 +40,32 @@ def test_custom_api_documentation_replaces_swagger():
 def test_clipboard_helper_has_http_compatible_fallback():
     response = client.get("/assets/clipboard.js")
     assert response.status_code == 200
-    assert 'navigator.clipboard?.writeText' in response.text
+    assert "navigator.clipboard?.writeText" in response.text
     assert 'document.execCommand("copy")' in response.text
 
 
 def test_openapi_schema_remains_available_for_tooling():
     response = client.get("/openapi.json")
     assert response.status_code == 200
-    assert response.json()["info"]["version"] == "0.2.0"
+    schema = response.json()
+    assert schema["info"]["version"] == "0.2.0"
+    for path in ("/v1/parse", "/v1/jobs"):
+        request_schema = schema["paths"][path]["post"]["requestBody"]["content"][
+            "multipart/form-data"
+        ]["schema"]
+        properties = schema["components"]["schemas"][request_schema["$ref"].split("/")[-1]][
+            "properties"
+        ]
+        assert "engine" not in properties
+        assert "ocr" not in properties
+        assert "dpi" not in properties
 
 
 def test_public_info_describes_service_limits():
     response = client.get("/v1/info")
     assert response.status_code == 200
     assert response.json()["version"] == "0.2.0"
-    assert response.json()["limits"]["default_dpi"] == 200
+    assert response.json()["limits"]["pdf_quality"]["fallback_render_dpi"] == 280
     assert response.json()["limits"]["concurrency"] == {
         "rapidocr": 1,
         "opendataloader": 3,
@@ -122,7 +137,6 @@ def test_admin_can_update_and_reset_runtime_config(tmp_path):
 
         values = initial.json()["values"]
         values["max_upload_mb"] = 72
-        values["default_dpi"] = 220
         updated = client.put("/v1/admin/config", headers=headers, json=values)
         assert updated.status_code == 200
         assert updated.json()["source"] == "runtime"
@@ -136,14 +150,13 @@ def test_admin_can_update_and_reset_runtime_config(tmp_path):
         app.dependency_overrides.clear()
 
 
-def test_admin_rejects_invalid_dpi_range(tmp_path):
+def test_admin_rejects_invalid_page_limit(tmp_path):
     settings = Settings(data_dir=tmp_path, api_keys=["admin-test"])
     app.dependency_overrides[get_settings] = lambda: settings
     headers = {"Authorization": "Bearer admin-test"}
     try:
         values = RuntimeConfigStore(settings).defaults().model_dump()
-        values["default_dpi"] = 400
-        values["max_dpi"] = 300
+        values["max_pdf_pages"] = 0
         response = client.put("/v1/admin/config", headers=headers, json=values)
         assert response.status_code == 422
         assert response.json()["error"]["code"] == "INVALID_ARGUMENT"

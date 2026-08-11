@@ -43,10 +43,7 @@ def test_busy_async_job_is_requeued_without_deleting_upload(tmp_path, monkeypatc
         "path": str(input_path),
         "filename": "scan.pdf",
         "media_type": "application/pdf",
-        "engine": "auto",
         "formats": ["text"],
-        "ocr_mode": "auto",
-        "dpi": 200,
         "include_bbox": True,
     }
 

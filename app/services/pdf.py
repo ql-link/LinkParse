@@ -1,19 +1,15 @@
 from collections.abc import Callable
-from dataclasses import dataclass
 from pathlib import Path
 
 from app.core.errors import LinkParseError
 
 
-@dataclass(slots=True)
-class PdfInfo:
-    page_count: int
-    sampled_average_text_length: float
-    page_text_lengths: list[int]
-    detected_type: str
+def validate_pdf(path: Path, max_pages: int) -> int:
+    """Validate that a PDF is readable and return its page count.
 
-
-def inspect_pdf(path: Path, max_pages: int, text_threshold: int) -> PdfInfo:
+    Content type is deliberately not classified here: every PDF enters the
+    same OpenDataLoader + page-level OCR pipeline.
+    """
     try:
         import fitz
 
@@ -23,29 +19,11 @@ def inspect_pdf(path: Path, max_pages: int, text_threshold: int) -> PdfInfo:
                 raise LinkParseError(
                     "PDF_TOO_MANY_PAGES", f"PDF has {page_count} pages; limit is {max_pages}", 413
                 )
-            lengths = [len(page.get_text().strip()) for page in document]
     except LinkParseError:
         raise
     except Exception as exc:
         raise LinkParseError("PDF_RENDER_FAILED", f"Unable to read PDF: {exc}", 422) from exc
-
-    sample = lengths[:3]
-    average = sum(sample) / len(sample) if sample else 0
-    has_text = [length >= text_threshold for length in lengths]
-    if has_text and all(has_text):
-        detected = "text_pdf"
-    elif has_text and any(has_text):
-        detected = "mixed_pdf"
-    else:
-        detected = "scanned_pdf"
-    return PdfInfo(page_count, average, lengths, detected)
-
-
-def extract_pdf_text(path: Path) -> list[str]:
-    import fitz
-
-    with fitz.open(path) as document:
-        return [page.get_text().strip() for page in document]
+    return page_count
 
 
 def render_pdf(

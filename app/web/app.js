@@ -430,11 +430,9 @@ async function loadPublicInfo() {
     $("#service-version").textContent = `v${info.version}`;
     $("#limit-upload").textContent = `${info.limits.max_upload_mb} MB`;
     $("#limit-pages").textContent = `${info.limits.max_pdf_pages} 页`;
-    $("#limit-dpi").textContent = `${info.limits.default_dpi} DPI`;
+    $("#limit-dpi").textContent = `${info.limits.pdf_quality.fallback_render_dpi} DPI`;
     $("#limit-ttl").textContent = `${info.limits.result_ttl_hours} 小时`;
     $("#drop-limit").textContent = `${info.limits.max_upload_mb}MB`;
-    $("#parse-dpi").value = info.limits.default_dpi;
-    $("#parse-dpi").max = info.limits.max_dpi;
   } catch {
     const status = $("#service-status");
     status.className = "service-orb down";
@@ -517,9 +515,6 @@ async function submitParse(event) {
   }
   const body = new FormData();
   body.append("file", file);
-  body.append("engine", $("#parse-engine").value);
-  body.append("ocr", $("#parse-ocr").value);
-  body.append("dpi", $("#parse-dpi").value);
   body.append("output_formats", formats.join(","));
   body.append("include_bbox", String($("#parse-bbox").checked));
   body.append("include_images", String($("#parse-images").checked));
