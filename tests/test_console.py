@@ -22,6 +22,11 @@ def test_console_is_available_with_security_headers():
     assert 'id="parse-engine"' not in response.text
     assert 'id="parse-ocr"' not in response.text
     assert 'id="parse-dpi"' not in response.text
+    assert (
+        'accept=".pdf,.docx,'
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document,'
+        '.png,.jpg,.jpeg,.webp,.tif,.tiff"'
+    ) in response.text
     assert "OpenDataLoader + 按页 OCR" in response.text
     assert 'src="/assets/clipboard.js' in response.text
     assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
