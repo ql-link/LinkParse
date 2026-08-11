@@ -112,7 +112,7 @@
         <section class="doc-section" id="pdf-pipeline">
           <div class="section-heading"><p class="section-kicker">PDF PIPELINE</p><h2><code>opendataloader_ocr</code> 的实际逻辑</h2><p>PDF 始终先经过 OpenDataLoader，再由页级质量门禁决定哪些页面需要 RapidOCR；客户端不选择互斥引擎。</p></div>
           <div class="route-map">
-            <div class="route-row"><span>DOCX</span><strong>Mammoth + 语义 HTML</strong><p>公式转 LaTeX；简单表格输出 Markdown，合并或嵌套等复杂表格保留为内嵌 HTML。</p></div>
+            <div class="route-row"><span>DOCX</span><strong>Mammoth + 语义 HTML</strong><p>公式转 LaTeX；简单表格输出 GFM Markdown，合并或嵌套等复杂表格输出 <code>table-rag-v1</code> 行级语义文本，图片保留链接。</p></div>
             <div class="route-row"><span>PNG / JPEG / WebP / TIFF</span><strong>RapidOCR</strong><p>直接图片输入执行 OCR。</p></div>
             <div class="route-row"><span>text_pdf</span><strong>OpenDataLoader + 0 页 OCR</strong><p>结构和文本通过门禁时不做无意义 OCR。</p></div>
             <div class="route-row"><span>scanned_pdf</span><strong>OpenDataLoader + 全页 OCR</strong><p>保留页码来源，再渲染所有有内容的扫描页进行 OCR。</p></div>
@@ -280,7 +280,7 @@
             <div><code>meta.pdf.initial_quality</code><span>object</span><p>OpenDataLoader 主解析后的逐页质量报告和待 OCR 页。</p></div>
             <div><code>meta.pdf.final_quality</code><span>object</span><p>页级 OCR 合并后的最终门禁结果；成功响应固定为 <code>PASSED</code>。</p></div>
             <div><code>meta.pdf.ocr_pages</code><span>integer[]</span><p>本次实际执行 RapidOCR 的 PDF 页码。</p></div>
-            <div><code>meta.word</code><span>object | null</span><p>DOCX 的章节、公式、Markdown/HTML 表格数量、图片、显式分页和解析告警。</p></div>
+            <div><code>meta.word</code><span>object | null</span><p>DOCX 的章节、公式、GFM/行级语义表格数量、图片、显式分页和解析告警。</p></div>
           </div>
         </section>
 

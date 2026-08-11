@@ -24,15 +24,23 @@ class HtmlMarkdownRenderer:
         "nav",
     }
 
-    def __init__(self, *, table_id_start: int = 1) -> None:
+    def __init__(
+        self,
+        *,
+        table_id_start: int = 1,
+        page_number: int | None = None,
+        initial_heading_path: list[str] | None = None,
+    ) -> None:
         self.image_rewriter = HtmlImageRewriter()
         self.table_processor = HtmlTableProcessor()
         self.table_count = 0
         self.markdown_table_count = 0
-        self.html_table_count = 0
+        self.rag_text_table_count = 0
         self.table_failure_count = 0
         self.table_irs: list[TableIR] = []
         self._next_table_id = table_id_start
+        self.page_number = page_number
+        self.heading_path = list(initial_heading_path or [])
         self.image_count = 0
         self.warnings: list[str] = []
 
@@ -51,6 +59,10 @@ class HtmlMarkdownRenderer:
         if name in {"h1", "h2", "h3", "h4", "h5", "h6"}:
             level = int(name[1])
             text = self.render_inline_children(node)
+            if text:
+                self.heading_path = self.heading_path[: level - 1]
+                self.heading_path.extend([""] * (level - 1 - len(self.heading_path)))
+                self.heading_path.append(text)
             return f"{'#' * level} {text}" if text else ""
         if name == "p":
             return self.render_inline_children(node)
@@ -87,12 +99,17 @@ class HtmlMarkdownRenderer:
         if name == "table":
             table_id = f"table-{self._next_table_id:03d}"
             self._next_table_id += 1
-            result = self.table_processor.render(node, table_id=table_id)
+            result = self.table_processor.render(
+                node,
+                table_id=table_id,
+                page_number=self.page_number,
+                heading_path=[heading for heading in self.heading_path if heading],
+            )
             self.table_count += 1
             if result.strategy == "markdown_table":
                 self.markdown_table_count += 1
-            elif result.strategy == "html_table":
-                self.html_table_count += 1
+            elif result.strategy == "rag_text_table":
+                self.rag_text_table_count += 1
             elif result.strategy == "html_fallback":
                 self.table_failure_count += 1
             if result.table_ir is not None:

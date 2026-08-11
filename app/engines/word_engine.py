@@ -133,8 +133,9 @@ class WordEngine:
         image_pages: dict[str, int] = {}
         table_count = 0
         markdown_table_count = 0
-        html_table_count = 0
+        rag_text_table_count = 0
         table_failure_count = 0
+        heading_path: list[str] = []
 
         for page_number, fragment in enumerate(page_fragments, start=1):
             soup = BeautifulSoup(fragment, "lxml")
@@ -146,15 +147,20 @@ class WordEngine:
                 source_ref = str(image.get("src", ""))
                 if source_ref:
                     image_pages.setdefault(source_ref, page_number)
-            renderer = HtmlMarkdownRenderer(table_id_start=table_count + 1)
+            renderer = HtmlMarkdownRenderer(
+                table_id_start=table_count + 1,
+                page_number=page_number,
+                initial_heading_path=heading_path,
+            )
             page_markdown = renderer.render_children(root).strip()
+            heading_path = renderer.heading_path
             markdown_pages.append(
                 f"<!-- WORD_PAGE:{page_number} -->"
                 + (f"\n\n{page_markdown}" if page_markdown else "")
             )
             table_count += renderer.table_count
             markdown_table_count += renderer.markdown_table_count
-            html_table_count += renderer.html_table_count
+            rag_text_table_count += renderer.rag_text_table_count
             table_failure_count += renderer.table_failure_count
             warnings.extend(renderer.warnings)
 
@@ -181,7 +187,8 @@ class WordEngine:
             "table_count": table_count,
             "table_ir_version": 1,
             "markdown_table_count": markdown_table_count,
-            "html_table_count": html_table_count,
+            "rag_text_table_count": rag_text_table_count,
+            "rag_table_schema": "table-rag-v1",
             "table_failure_count": table_failure_count,
             "image_count": len(image_paths),
             "omitted_image_count": omitted_images,

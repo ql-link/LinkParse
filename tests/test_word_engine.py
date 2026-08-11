@@ -77,7 +77,8 @@ def test_word_engine_preserves_structure_and_preprocesses_formula(tmp_path):
     assert result.metadata["formula_count"] == 1
     assert result.metadata["pagination_supported"] is True
     assert result.metadata["markdown_table_count"] == 1
-    assert result.metadata["html_table_count"] == 0
+    assert result.metadata["rag_text_table_count"] == 0
+    assert result.metadata["rag_table_schema"] == "table-rag-v1"
 
 
 def test_document_parser_uploads_word_images_and_rewrites_all_outputs(tmp_path):
