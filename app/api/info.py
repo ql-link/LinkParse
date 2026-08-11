@@ -12,14 +12,25 @@ def service_info(settings: Annotated[Settings, Depends(get_effective_settings)])
     return {
         "name": settings.app_name,
         "version": "0.2.0",
-        "description": "CPU-first document parsing with OpenDataLoader and RapidOCR",
+        "description": "CPU-first document parsing for PDF, Word and images",
         "pdf_pipeline": {
             "name": "opendataloader_ocr",
             "primary": "opendataloader",
             "fallback": "page_level_rapidocr",
             "quality_gate": True,
         },
-        "input_types": ["PDF", "PNG", "JPEG", "WebP", "TIFF"],
+        "word_pipeline": {
+            "name": "mammoth_word",
+            "primary": "mammoth",
+            "intermediate": "semantic_html",
+            "formula_preprocessing": "omml_to_latex",
+            "table_strategy": "simple_markdown_complex_html",
+            "output_formats": ["markdown"],
+            "pagination_supported": True,
+            "pagination_source": "saved_docx_page_breaks",
+            "bbox_supported": False,
+        },
+        "input_types": ["PDF", "DOCX", "PNG", "JPEG", "WebP", "TIFF"],
         "output_formats": ["text", "json", "markdown", "html"],
         "image_output": {
             "enabled_by": "include_images=true",
@@ -45,6 +56,7 @@ def service_info(settings: Annotated[Settings, Depends(get_effective_settings)])
             "concurrency": {
                 "rapidocr": settings.ocr_max_concurrency,
                 "opendataloader": settings.opendataloader_max_concurrency,
+                "word": settings.word_max_concurrency,
                 "wait_seconds": settings.concurrency_wait_seconds,
             },
             "opendataloader": {

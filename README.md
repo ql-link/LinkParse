@@ -1,11 +1,11 @@
 # LinkParse
 
-纯 CPU 文档解析服务。PDF 统一使用 OpenDataLoader + 按页 RapidOCR 管线：先由
-OpenDataLoader 生成带页码来源的结构化结果，再通过质量门禁选择需要 OCR 的页面。
+纯 CPU 文档解析服务。PDF 统一使用 OpenDataLoader + 按页 RapidOCR 管线；DOCX 使用
+Mammoth 转语义 HTML，并收敛为 Markdown 产物。
 
 ## 能力
 
-- `POST /v1/parse`：同步解析图片或 PDF
+- `POST /v1/parse`：同步解析图片、PDF 或 DOCX
 - `POST /v1/jobs`：创建异步解析任务
 - `GET /v1/jobs/{job_id}`：查询任务状态
 - `GET /v1/jobs/{job_id}/result`：获取任务结果
@@ -16,11 +16,12 @@ OpenDataLoader 生成带页码来源的结构化结果，再通过质量门禁�
 - `POST /v1/auth/register`、`POST /v1/auth/login`：用户注册与登录
 - `GET/POST/DELETE /v1/account/keys`：申请、查看与撤销用户 API Key
 - `GET /v1/account/records`：查看当前用户的解析记录
-- 输出 `text`、`json`、`markdown`、`html`
-- 可选导出 PDF 内嵌图片、OCR 页面图或原始图片到阿里云 OSS，并在 `assets` 返回 URL
+- PDF/图片按需输出 `text`、`json`、`markdown`、`html`；DOCX 固定输出 `markdown`
+- 可选导出 PDF/DOCX 内嵌图片、OCR 页面图或原始图片到阿里云 OSS，并在 `assets` 返回 URL
 - 独立用户 API Key、解析记录归属、魔数文件检测、大小/页数/DPI 限制和统一错误码
-- Redis 分布式并发控制，分别限制 RapidOCR 与 OpenDataLoader 的执行数量
+- Redis 分布式并发控制，分别限制 RapidOCR、OpenDataLoader 与 Word 的执行数量
 - PDF 只有一条 `opendataloader_ocr` 管线，不暴露互斥引擎和强制 OCR 开关
+- DOCX 只有一条 `mammoth_word` 管线；legacy `.doc` 暂不支持
 - 文本 PDF 通常无需 OCR，扫描 PDF 通常逐页 OCR，混合 PDF 只 OCR 问题页
 - OpenDataLoader 在独立子进程中运行，带解析超时、输出文件数/体积和日志体积保护
 - Markdown 保留 `ODL_PAGE` 页码来源，并在 `meta.pdf.structure` 返回表格及页面溯源信息
@@ -44,6 +45,8 @@ uvicorn app.main:app --reload
 ```bash
 uv lock
 uv export --frozen --no-dev --no-emit-project --no-hashes --output-file requirements-container.lock
+# 离线 Docker 构建环境还需在目标 Python/平台上刷新 wheelhouse
+python -m pip wheel --wheel-dir wheelhouse -r requirements-container.lock
 ```
 
 异步 worker：
@@ -141,11 +144,36 @@ Markdown/HTML 表格矩阵和来源页。OCR 文本以 `PAGE_FALLBACK:OCR` 标�
 OpenDataLoader 页面内；OpenDataLoader 原文不会被覆盖。页码来源不完整、OCR 置信度不足或补齐后
 仍未通过质量门禁时，解析会明确失败，不返回表面成功但内容不完整的结果。
 
+## DOCX 解析管线
+
+DOCX 上传后会先验证 OOXML 容器、成员路径、压缩比和解压后资源上限，再执行：
+
+```text
+OMML 公式转 LaTeX → Mammoth 语义 HTML → DOM 清理 → Markdown
+```
+
+标题、段落、粗体/斜体、链接、嵌套列表、表格和内嵌图片按文档顺序输出。简单表格转为
+Markdown 表格；合并单元格、多级表头、嵌套表格、图片或多段单元格等复杂表格以内嵌 HTML
+`<table>` 保留在 Markdown 中，不再改写为自然语言记录。解析器内部使用 TableIR 保存单元格坐标、
+`rowspan`、`colspan`、文本、图片和嵌套信息；HTML 表格使用
+`LINKPARSE_TABLE_START/END` 成对注释标记边界。解析器按照 DOCX 中保存的
+显式分页符和 `lastRenderedPageBreak` 顺序，从第 1 页开始编号；Markdown 使用
+`<!-- WORD_PAGE:n -->` 标记页序。`meta.page_count` 返回推导页数，`meta.word` 同时返回分页来源、
+章节数、公式数、表格数、图片数和解析告警。
+Word 的自动排版页码受字体与环境影响，因此未保存分页标记的文档会按单页处理；Word 仍不提供 bbox。
+
+DOCX 的最终产物固定为 `outputs.markdown`。请求中的 `output_formats` 只控制 PDF 和图片输出，
+不会为 DOCX 额外生成 Text、JSON 或 HTML 产物。
+
 ## 数据保留
 
 同步请求完成后立即删除原文件和中间图片。异步原文件在任务结束后删除，结果默认保留 24 小时。Worker 内置 Beat 调度器默认每 60 分钟执行一次清理：到期结果及其 OSS 图片会被删除并将任务标记为 `expired`，再经过一个结果 TTL 周期后删除任务元数据；同时清理同步请求的 OSS 图片清单、无主结果以及崩溃遗留的上传文件和临时目录。可通过 `LINKPARSE_CLEANUP_INTERVAL_MINUTES` 调整执行间隔，修改后需重启 Worker。
 
-`include_images` 默认为 `false`。开启后，OpenDataLoader 会导出 PDF 内嵌图片；RapidOCR 解析 PDF 时会导出页面渲染图；直接上传图片时会保存原图。默认示例使用 `qingluo-public` 的 `LinkRarse/` 前缀和公共 OSS 域名，因此在结果保留期内返回不变的 URL；对象到期后会被清理。若改为私有桶并清空 `LINKPARSE_OSS_PUBLIC_BASE_URL`，服务会返回有时效的签名 URL。
+`include_images` 默认为 `false`。开启后，OpenDataLoader 会导出 PDF 内嵌图片，Mammoth 会导出
+DOCX 内嵌图片，RapidOCR 解析 PDF 时会导出页面渲染图，直接上传图片时会保存原图。DOCX 图片
+在上传 OSS 前会校验类型、单图大小和像素数，并按内容 SHA-256 去重。默认示例使用
+`qingluo-public` 的 `LinkRarse/` 前缀和公共 OSS 域名，因此在结果保留期内返回不变的 URL；
+对象到期后会被清理。若改为私有桶并清空 `LINKPARSE_OSS_PUBLIC_BASE_URL`，服务会返回有时效的签名 URL。
 
 ## 测试
 
@@ -154,7 +182,8 @@ pytest
 ruff check .
 ```
 
-解析引擎属于重依赖，单元测试不下载模型；部署后的验收应分别使用一张中英文图片、文本 PDF、扫描 PDF 和混合 PDF。
+解析引擎属于重依赖，单元测试不下载模型；部署后的验收应分别使用一张中英文图片、文本 PDF、
+扫描 PDF、混合 PDF，以及包含标题、列表、复杂表格、公式和图片的 DOCX。
 
 RapidOCR 适配器会优先使用 Python 包内自带的 ONNX 模型，从而避免首个线上请求临时下载模型。如果未来升级的 RapidOCR 包不再携带模型，应在构建镜像时准备模型，并通过适配器的模型配置指定本地路径。
 

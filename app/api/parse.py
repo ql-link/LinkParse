@@ -13,7 +13,7 @@ from app.db import Database, get_database
 from app.schemas.models import ParseResponse
 from app.services.assets import OssAssetStorage
 from app.services.parse_records import create_parse_record, update_parse_record
-from app.services.parser import DocumentParser, parse_formats
+from app.services.parser import DocumentParser, engine_for_media_type, parse_formats
 from app.services.result_store import ResultStore
 from app.services.uploads import save_upload
 
@@ -46,7 +46,7 @@ async def parse_document(
             job_id=None,
             filename=filename,
             mode="sync",
-            engine="opendataloader_ocr",
+            engine=engine_for_media_type(media_type),
         )
         result = await run_in_threadpool(
             DocumentParser(settings).parse,

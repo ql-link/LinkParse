@@ -69,6 +69,7 @@ def test_public_info_describes_service_limits():
     assert response.json()["limits"]["concurrency"] == {
         "rapidocr": 1,
         "opendataloader": 3,
+        "word": 2,
         "wait_seconds": 30,
     }
 

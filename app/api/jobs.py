@@ -12,7 +12,7 @@ from app.core.security import AuthContext, authenticate
 from app.db import Database, get_database
 from app.schemas.models import JobResponse, ParseResponse
 from app.services.parse_records import create_parse_record, record_owned_by, update_parse_record
-from app.services.parser import parse_formats
+from app.services.parser import engine_for_media_type, parse_formats
 from app.services.result_store import ResultStore
 from app.services.uploads import save_upload
 
@@ -52,7 +52,7 @@ async def create_job(
             job_id=job_id,
             filename=filename,
             mode="async",
-            engine="opendataloader_ocr",
+            engine=engine_for_media_type(media_type),
             status="queued",
         )
         store.write(job_id, payload)

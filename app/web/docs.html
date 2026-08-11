@@ -31,9 +31,9 @@
           <div class="hero-status"><span>REST API</span><span>HTTP + JSON</span><span>v0.2.0</span></div>
           <h1>LinkParse API</h1>
           <p class="hero-subtitle">完整接口参考</p>
-          <p class="lede">上传 PDF 或图片。PDF 统一执行 OpenDataLoader + 按页 OCR 管线，返回 Text、JSON、Markdown、HTML。本文档覆盖当前全部接口、字段定义和可直接复制的出入参示例。</p>
+          <p class="lede">上传 PDF、DOCX 或图片。PDF 执行 OpenDataLoader + 按页 OCR；DOCX 执行 Mammoth + 语义 HTML 管线，最终只返回 Markdown。</p>
           <div class="api-summary-grid">
-            <div><span>输入格式</span><strong>PDF / PNG / JPEG / WebP / TIFF</strong></div>
+            <div><span>输入格式</span><strong>PDF / DOCX / PNG / JPEG / WebP / TIFF</strong></div>
             <div><span>认证方式</span><strong>Bearer Session / API Key</strong></div>
             <div><span>同步接口</span><strong>POST /v1/parse</strong></div>
             <div><span>异步接口</span><strong>POST /v1/jobs</strong></div>
@@ -86,7 +86,7 @@
         </section>
 
         <section class="doc-section" id="formats">
-          <div class="section-heading"><p class="section-kicker">OUTPUT FORMATS</p><h2><code>output_formats</code> 返回格式</h2><p>参数值是逗号分隔字符串，可选择一种或多种格式。选择格式不会改变 HTTP Content-Type；结果始终放在 JSON 响应的 <code>outputs</code> 对象内。</p></div>
+          <div class="section-heading"><p class="section-kicker">OUTPUT FORMATS</p><h2><code>output_formats</code> 返回格式</h2><p>参数值是逗号分隔字符串，用于 PDF 和图片。DOCX 固定只返回 <code>outputs.markdown</code>；选择格式不会改变 HTTP Content-Type。</p></div>
           <div class="format-layout">
             <div class="format-options" role="tablist" aria-label="返回格式示例">
               <button class="format-tab active fluid-press" type="button" role="tab" aria-selected="true" data-format="markdown"><span>markdown</span><small>标题、段落等语义文本</small></button>
@@ -102,16 +102,17 @@
           </div>
           <div class="schema-table">
             <div class="schema-head"><span>值</span><span>字段类型</span><span>说明</span></div>
-            <div><code>text</code><span>string</span><p>由最终 Markdown 转换的纯文本，保持 PDF 页序。</p></div>
-            <div><code>json</code><span>object</span><p>OpenDataLoader 结构化结果；发生页级 OCR 时增加 <code>ocr_fallback_pages</code>。</p></div>
-            <div><code>markdown</code><span>string</span><p>以 <code>ODL_PAGE</code> 标记分页，OCR 补充位于对应页面内。</p></div>
-            <div><code>html</code><span>string</span><p>OpenDataLoader HTML；OCR 补充按来源页插入。</p></div>
+            <div><code>text</code><span>string</span><p>PDF 和图片的纯文本结果；DOCX 不生成该产物。</p></div>
+            <div><code>json</code><span>object</span><p>PDF 和图片的结构化结果；DOCX 不生成该产物。</p></div>
+            <div><code>markdown</code><span>string</span><p>PDF 以 <code>ODL_PAGE</code>、DOCX 以 <code>WORD_PAGE</code> 标记分页；这是 DOCX 的唯一产物。</p></div>
+            <div><code>html</code><span>string</span><p>PDF 或图片的 HTML 结果；DOCX 不生成该产物。</p></div>
           </div>
         </section>
 
         <section class="doc-section" id="pdf-pipeline">
           <div class="section-heading"><p class="section-kicker">PDF PIPELINE</p><h2><code>opendataloader_ocr</code> 的实际逻辑</h2><p>PDF 始终先经过 OpenDataLoader，再由页级质量门禁决定哪些页面需要 RapidOCR；客户端不选择互斥引擎。</p></div>
           <div class="route-map">
+            <div class="route-row"><span>DOCX</span><strong>Mammoth + 语义 HTML</strong><p>公式转 LaTeX；简单表格输出 Markdown，合并或嵌套等复杂表格保留为内嵌 HTML。</p></div>
             <div class="route-row"><span>PNG / JPEG / WebP / TIFF</span><strong>RapidOCR</strong><p>直接图片输入执行 OCR。</p></div>
             <div class="route-row"><span>text_pdf</span><strong>OpenDataLoader + 0 页 OCR</strong><p>结构和文本通过门禁时不做无意义 OCR。</p></div>
             <div class="route-row"><span>scanned_pdf</span><strong>OpenDataLoader + 全页 OCR</strong><p>保留页码来源，再渲染所有有内容的扫描页进行 OCR。</p></div>
@@ -130,7 +131,8 @@
   "engines": {
     "pymupdf": true,
     "rapidocr": true,
-    "opendataloader": true
+    "opendataloader": true,
+    "mammoth_word": true
   },
   "database": { "configured": true, "available": true }
 }</code></pre></div>
@@ -146,7 +148,7 @@
   "name": "LinkParse",
   "version": "0.2.0",
   "description": "CPU-first document parsing...",
-  "input_types": ["PDF", "PNG", "JPEG", "WebP", "TIFF"],
+  "input_types": ["PDF", "DOCX", "PNG", "JPEG", "WebP", "TIFF"],
   "output_formats": ["text", "json", "markdown", "html"],
   "image_output": {
     "enabled_by": "include_images=true",
@@ -163,6 +165,7 @@
     "concurrency": {
       "rapidocr": 1,
       "opendataloader": 3,
+      "word": 2,
       "wait_seconds": 30
     }
   },
@@ -210,13 +213,13 @@
 
         <section class="doc-section endpoint-section" id="parse">
           <div class="endpoint-head"><div><span class="method post">POST</span><code>/v1/parse</code></div><span class="auth-badge">Bearer Session / API Key</span></div>
-          <div class="section-heading"><h2>同步解析文档</h2><p>上传文件并等待解析完成，成功返回 <code>ParseResponse</code>。适合图片和短 PDF；长文档建议使用异步任务。</p></div>
+          <div class="section-heading"><h2>同步解析文档</h2><p>上传文件并等待解析完成，成功返回 <code>ParseResponse</code>。适合图片、DOCX 和短 PDF；长文档建议使用异步任务。</p></div>
           <h3 class="subheading">请求参数 · multipart/form-data</h3>
           <div class="param-table">
             <div class="param-head"><span>字段</span><span>类型 / 默认值</span><span>说明与示例</span></div>
-            <div><code>file <em>必填</em></code><span>File</span><p>PDF、PNG、JPEG、WebP、TIFF。示例：<code>@resume.pdf</code>。</p></div>
-            <div><code>output_formats</code><span>CSV string · <b>text,json</b></span><p><code>text,json,markdown,html</code> 的任意非空组合。</p></div>
-            <div><code>include_bbox</code><span>boolean · <b>true</b></span><p>是否在 OCR JSON 的每个文字块中返回 <code>bbox</code>；置信度始终返回。</p></div>
+            <div><code>file <em>必填</em></code><span>File</span><p>PDF、DOCX、PNG、JPEG、WebP、TIFF。示例：<code>@resume.docx</code>。</p></div>
+            <div><code>output_formats</code><span>CSV string · <b>text,json</b></span><p>PDF/图片可选择 <code>text,json,markdown,html</code>；DOCX 固定为 <code>markdown</code>。</p></div>
+            <div><code>include_bbox</code><span>boolean · <b>true</b></span><p>是否在 OCR JSON 中返回 <code>bbox</code>；DOCX 不支持 bbox。</p></div>
             <div><code>include_images</code><span>boolean · <b>false</b></span><p>设为 <code>true</code> 后把内嵌图片、OCR 页面图或原始图片上传到阿里云 OSS，并返回 <code>assets</code>。</p></div>
           </div>
           <div class="example-pair spaced">
@@ -267,16 +270,17 @@
             <div class="schema-head"><span>响应字段</span><span>类型</span><span>说明</span></div>
             <div><code>request_id</code><span>string</span><p>请求追踪 ID，与响应头 <code>X-Request-ID</code> 一致。</p></div>
             <div><code>filename</code><span>string</span><p>经过安全处理后的原文件名。</p></div>
-            <div><code>engine</code><span>string</span><p>PDF 固定为 <code>opendataloader_ocr</code>；直接图片输入为 <code>rapidocr</code>。</p></div>
-            <div><code>detected_type</code><span>string</span><p><code>image</code>、<code>text_pdf</code>、<code>scanned_pdf</code>、<code>mixed_pdf</code>。</p></div>
-            <div><code>outputs</code><span>object</span><p>只包含 <code>output_formats</code> 请求的格式。</p></div>
+            <div><code>engine</code><span>string</span><p>PDF 为 <code>opendataloader_ocr</code>，DOCX 为 <code>mammoth_word</code>，图片为 <code>rapidocr</code>。</p></div>
+            <div><code>detected_type</code><span>string</span><p><code>docx</code>、<code>image</code>、<code>text_pdf</code>、<code>scanned_pdf</code>、<code>mixed_pdf</code>。</p></div>
+            <div><code>outputs</code><span>object</span><p>PDF/图片包含请求的格式；DOCX 固定只包含 <code>markdown</code>。</p></div>
             <div><code>assets</code><span>array</span><p>图片资源列表。未开启图片输出时为空数组；<code>kind</code> 为 <code>embedded_image</code>、<code>page_image</code> 或 <code>source_image</code>。</p></div>
             <div><code>assets[].url</code><span>string</span><p>OSS 图片 URL。公共域名模式下地址本身不签名且 <code>expires_at=null</code>；对象仍会随结果保留期限被定时删除。私有桶模式返回有时效的签名地址。</p></div>
-            <div><code>meta.page_count</code><span>integer</span><p>文档总页数；图片固定为 1。</p></div>
+            <div><code>meta.page_count</code><span>integer</span><p>PDF 总页数、图片为 1；DOCX 按原文件保存的分页标记顺序推导，未保存标记时为 1。</p></div>
             <div><code>meta.duration_ms</code><span>integer</span><p>服务端解析耗时，单位毫秒。</p></div>
             <div><code>meta.pdf.initial_quality</code><span>object</span><p>OpenDataLoader 主解析后的逐页质量报告和待 OCR 页。</p></div>
             <div><code>meta.pdf.final_quality</code><span>object</span><p>页级 OCR 合并后的最终门禁结果；成功响应固定为 <code>PASSED</code>。</p></div>
             <div><code>meta.pdf.ocr_pages</code><span>integer[]</span><p>本次实际执行 RapidOCR 的 PDF 页码。</p></div>
+            <div><code>meta.word</code><span>object | null</span><p>DOCX 的章节、公式、Markdown/HTML 表格数量、图片、显式分页和解析告警。</p></div>
           </div>
         </section>
 
@@ -358,6 +362,7 @@
     "task_time_limit_seconds": 300,
     "ocr_max_concurrency": 1,
     "opendataloader_max_concurrency": 3,
+    "word_max_concurrency": 2,
     "concurrency_wait_seconds": 30,
     "job_result_ttl_hours": 24,
     "ort_intra_op_num_threads": 3,
@@ -380,7 +385,7 @@
             <div class="schema-table config-schema">
               <div class="schema-head"><span>字段</span><span>允许范围</span><span>作用</span></div>
               <div><code>max_upload_mb</code><span>1–500</span><p>单文件上传上限，单位 MB。</p></div><div><code>max_pdf_pages</code><span>1–500</span><p>PDF 最大页数。</p></div><div><code>task_time_limit_seconds</code><span>30–3600</span><p>异步任务硬超时秒数。</p></div><div><code>job_result_ttl_hours</code><span>1–720</span><p>任务结果保留小时数。</p></div><div><code>ort_intra_op_num_threads</code><span>1–64</span><p>ONNXRuntime 单算子内部线程数。</p></div><div><code>ort_inter_op_num_threads</code><span>1–64</span><p>ONNXRuntime 算子间线程数。</p></div>
-              <div><code>ocr_max_concurrency</code><span>1–32</span><p>RapidOCR 分布式并发上限。</p></div><div><code>opendataloader_max_concurrency</code><span>1–32</span><p>OpenDataLoader 分布式并发上限。</p></div><div><code>concurrency_wait_seconds</code><span>0–600</span><p>同步请求等待可用槽位的秒数。</p></div>
+              <div><code>ocr_max_concurrency</code><span>1–32</span><p>RapidOCR 分布式并发上限。</p></div><div><code>opendataloader_max_concurrency</code><span>1–32</span><p>OpenDataLoader 分布式并发上限。</p></div><div><code>word_max_concurrency</code><span>1–32</span><p>Word 分布式并发上限。</p></div><div><code>concurrency_wait_seconds</code><span>0–600</span><p>同步请求等待可用槽位的秒数。</p></div>
             </div>
             <div class="example-pair spaced">
               <div class="code-window"><div class="code-toolbar"><span><b></b>请求 · application/json</span><button class="copy-code fluid-press" data-copy="config-put-request">复制</button></div><pre id="config-put-request"><code>curl -X PUT <span class="origin-token"></span>/v1/admin/config \
@@ -392,6 +397,7 @@
     "task_time_limit_seconds": 300,
     "ocr_max_concurrency": 1,
     "opendataloader_max_concurrency": 3,
+    "word_max_concurrency": 2,
     "concurrency_wait_seconds": 30,
     "job_result_ttl_hours": 24,
     "ort_intra_op_num_threads": 3,
@@ -404,6 +410,7 @@
     "task_time_limit_seconds": 300,
     "ocr_max_concurrency": 1,
     "opendataloader_max_concurrency": 3,
+    "word_max_concurrency": 2,
     "concurrency_wait_seconds": 30,
     "job_result_ttl_hours": 24,
     "ort_intra_op_num_threads": 3,
@@ -451,7 +458,8 @@
             <div><code>410</code><strong>JOB_RESULT_EXPIRED</strong><p>结果文件已经过期。</p><span>重新提交原文件。</span></div>
             <div><code>413</code><strong>FILE_TOO_LARGE</strong><p>上传文件超过大小限制。</p><span>压缩、拆分或调整配置。</span></div>
             <div><code>413</code><strong>PDF_TOO_MANY_PAGES</strong><p>PDF 页数超过限制。</p><span>拆分 PDF 或调整配置。</span></div>
-            <div><code>415</code><strong>UNSUPPORTED_FILE_TYPE</strong><p>文件头不是支持的 PDF 或图片格式。</p><span>转换文件格式后重试。</span></div>
+            <div><code>415</code><strong>UNSUPPORTED_FILE_TYPE</strong><p>文件头不是支持的 PDF、DOCX 或图片格式。</p><span>转换文件格式后重试。</span></div>
+            <div><code>422</code><strong>INVALID_WORD_DOCUMENT</strong><p>DOCX 损坏、加密、格式不符或超过解压资源限制。</p><span>检查并重新保存为标准 DOCX。</span></div>
             <div><code>422</code><strong>INVALID_ARGUMENT</strong><p>DPI、输出格式、引擎或 OCR 组合无效。</p><span>按参数表修正请求。</span></div>
             <div><code>422</code><strong>PDF_RENDER_FAILED</strong><p>PDF 损坏、加密或无法渲染。</p><span>检查或重新生成 PDF。</span></div>
             <div><code>422</code><strong>OCR_FAILED</strong><p>某一页 OCR 执行失败。</p><span>检查文件并保留 request_id。</span></div>
