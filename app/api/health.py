@@ -1,5 +1,6 @@
 import importlib.util
 import logging
+import shutil
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
@@ -19,6 +20,7 @@ def health(settings: Annotated[Settings, Depends(get_effective_settings)]) -> di
         "rapidocr": importlib.util.find_spec("rapidocr") is not None,
         "opendataloader": importlib.util.find_spec("opendataloader_pdf") is not None,
         "mammoth_word": importlib.util.find_spec("mammoth") is not None,
+        "libreoffice_doc": shutil.which("soffice") is not None,
     }
     storage = OssAssetStorage(settings)
     database_status = {"configured": bool(settings.database_url), "available": False}

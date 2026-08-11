@@ -11,8 +11,9 @@ from app.engines.rapidocr_engine import RapidOCREngine
 from app.engines.word_engine import WordEngine
 from app.services.assets import OssAssetStorage
 from app.services.concurrency import ConcurrencyLimiter
-from app.services.file_validate import DOCX_MEDIA_TYPE
+from app.services.file_validate import DOC_MEDIA_TYPE, DOCX_MEDIA_TYPE
 from app.services.format_convert import fill_missing_outputs, outputs_from_pages
+from app.services.legacy_doc import LegacyDocConversion, LegacyDocConverter
 from app.services.pdf import render_pdf, validate_pdf
 from app.services.pdf_quality import analyze_pdf_quality
 from app.services.pdf_structure import analyze_pdf_markdown
@@ -25,7 +26,7 @@ def engine_for_media_type(media_type: str) -> str:
         return "rapidocr"
     if media_type == "application/pdf":
         return "opendataloader_ocr"
-    if media_type == DOCX_MEDIA_TYPE:
+    if media_type in {DOC_MEDIA_TYPE, DOCX_MEDIA_TYPE}:
         return "mammoth_word"
     return "unsupported"
 
@@ -44,11 +45,13 @@ class DocumentParser:
         settings: Settings,
         asset_storage: OssAssetStorage | None = None,
         concurrency_limiter: ConcurrencyLimiter | None = None,
+        legacy_doc_converter: LegacyDocConverter | None = None,
     ) -> None:
         self.settings = settings
         self._ocr: RapidOCREngine | None = None
         self._structured: OpenDataLoaderEngine | None = None
         self._word: WordEngine | None = None
+        self._legacy_doc_converter = legacy_doc_converter
         self.asset_storage = asset_storage or OssAssetStorage(settings)
         self.concurrency_limiter = concurrency_limiter or ConcurrencyLimiter(settings)
 
@@ -78,6 +81,15 @@ class DocumentParser:
         if self._word is None:
             self._word = WordEngine()
         return self._word
+
+    @property
+    def legacy_doc_converter(self) -> LegacyDocConverter:
+        if self._legacy_doc_converter is None:
+            self._legacy_doc_converter = LegacyDocConverter(
+                timeout_seconds=self.settings.doc_conversion_timeout_seconds,
+                max_output_bytes=self.settings.max_upload_mb * 1024 * 1024,
+            )
+        return self._legacy_doc_converter
 
     def parse(
         self,
@@ -122,15 +134,17 @@ class DocumentParser:
                 detected = "scanned_pdf"
             else:
                 detected = "mixed_pdf"
-        elif media_type == DOCX_MEDIA_TYPE:
+        elif media_type in {DOC_MEDIA_TYPE, DOCX_MEDIA_TYPE}:
             outputs, assets, word_metadata = self._parse_word_pipeline(
                 path,
                 include_images,
                 request_id,
+                legacy_doc=media_type == DOC_MEDIA_TYPE,
             )
             if progress:
                 progress(word_metadata["page_count"], word_metadata["page_count"])
-            selected, detected = "mammoth_word", "docx"
+            selected = "mammoth_word"
+            detected = "doc" if media_type == DOC_MEDIA_TYPE else "docx"
             page_count = word_metadata["page_count"]
         else:
             raise LinkParseError("UNSUPPORTED_FILE_TYPE", "Unsupported file type", 415)
@@ -154,14 +168,22 @@ class DocumentParser:
         path: Path,
         include_images: bool,
         request_id: str,
+        legacy_doc: bool = False,
     ) -> tuple[dict, list[dict], dict]:
         output_dir = self.settings.data_dir / "tmp" / f"{path.stem}_word"
         assets: list[dict] = []
+        conversion: LegacyDocConversion | None = None
         try:
             with self.concurrency_limiter.slot("word"):
                 if not self.word.available():
                     raise EngineUnavailable("mammoth_word")
-                parsed = self.word.parse(path, output_dir, include_images)
+                source = path
+                if legacy_doc:
+                    conversion = self.legacy_doc_converter.convert(
+                        path, self.settings.data_dir / "tmp"
+                    )
+                    source = conversion.path
+                parsed = self.word.parse(source, output_dir, include_images)
             outputs = {"markdown": parsed.markdown}
             if include_images and parsed.image_paths:
                 assets, replacements = self.asset_storage.upload_files(
@@ -172,11 +194,23 @@ class DocumentParser:
                     pages=parsed.image_pages,
                 )
                 outputs = self.asset_storage.rewrite_outputs(outputs, replacements)
-            return outputs, assets, parsed.metadata
+                parsed_metadata = self.asset_storage.rewrite_outputs(
+                    parsed.metadata, replacements
+                )
+            else:
+                parsed_metadata = parsed.metadata
+            metadata = {
+                **parsed_metadata,
+                "source_format": "doc" if legacy_doc else "docx",
+                "conversion": conversion.metadata if conversion else None,
+            }
+            return outputs, assets, metadata
         except Exception:
             self.asset_storage.delete_assets(assets)
             raise
         finally:
+            if conversion:
+                conversion.cleanup()
             shutil.rmtree(output_dir, ignore_errors=True)
 
     def _ocr_image(self, path: Path, page: int, include_bbox: bool) -> dict:

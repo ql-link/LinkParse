@@ -36,6 +36,7 @@ class HtmlTableProcessor:
                     strategy="rag_text_table",
                     table_ir=table_ir,
                     image_count=table_ir.image_count,
+                    preview_tables=self._build_preview_tables(table_ir, table_id),
                 )
             return TableRenderResult(
                 markdown=self._render_markdown_table_block(
@@ -202,7 +203,7 @@ class HtmlTableProcessor:
         reasons = ",".join(table_ir.complexity_reasons)
         start_marker = (
             f'<!-- LINKPARSE_TABLE_START id="{table_id}" format="rag_text" '
-            f'schema="table-rag-v1" reasons="{reasons}"'
+            f'schema="table-rag-v2" reasons="{reasons}"'
         )
         if parent is not None:
             parent_id, parent_row, parent_column = parent
@@ -212,7 +213,8 @@ class HtmlTableProcessor:
             )
         start_marker += " -->"
         end_marker = f'<!-- LINKPARSE_TABLE_END id="{table_id}" -->'
-        headers = self._flatten_headers(table_ir)
+        header_paths = self._header_paths(table_ir)
+        field_names = self._field_names(header_paths)
         child_refs: dict[tuple[int, int], str] = {}
         child_tables: list[tuple[str, TableIR, int, int]] = []
         child_number = 0
@@ -231,7 +233,10 @@ class HtmlTableProcessor:
                 heading_path=heading_path,
             )
         )
-        lines.append("列：" + "；".join(headers))
+        header_summary = self._render_header_summary(header_paths)
+        if header_summary:
+            lines.append("表头：")
+            lines.extend(f"- {item}" for item in header_summary)
 
         header_rows = min(table_ir.header_row_count, table_ir.row_count)
         body_line_count = 0
@@ -242,7 +247,7 @@ class HtmlTableProcessor:
                     continue
                 if not (cell.row <= row_index < cell.row + cell.row_span):
                     continue
-                covered_headers = headers[
+                covered_headers = field_names[
                     cell.column : min(table_ir.column_count, cell.column + cell.column_span)
                 ]
                 field_name = "、".join(dict.fromkeys(covered_headers)) or f"列{cell.column + 1}"
@@ -255,7 +260,10 @@ class HtmlTableProcessor:
                     fields.append(f"{field_name}：{value}")
             if fields:
                 body_line_count += 1
-                lines.append("- " + "；".join(fields))
+                if body_line_count == 1:
+                    lines.append("数据：")
+                escaped_fields = [self._escape_rag_field(field) for field in fields]
+                lines.append(f"- 行{body_line_count}：" + " | ".join(escaped_fields))
 
         if body_line_count == 0:
             header_content: list[str] = []
@@ -284,7 +292,7 @@ class HtmlTableProcessor:
             )
         return "\n\n".join(blocks)
 
-    def _flatten_headers(self, table_ir: TableIR) -> list[str]:
+    def _header_paths(self, table_ir: TableIR) -> list[list[str]]:
         header_rows = min(table_ir.header_row_count, table_ir.row_count)
         header_matrix = [["" for _ in range(table_ir.column_count)] for _ in range(header_rows)]
         for cell in table_ir.cells:
@@ -296,15 +304,85 @@ class HtmlTableProcessor:
                 for column_index in range(cell.column, column_end):
                     header_matrix[row_index][column_index] = cell.text
 
-        headers: list[str] = []
+        title_row_count = self._title_header_row_count(table_ir)
+        headers: list[list[str]] = []
         for column_index in range(table_ir.column_count):
             parts: list[str] = []
-            for row_index in range(header_rows):
+            for row_index in range(title_row_count, header_rows):
                 part = header_matrix[row_index][column_index]
                 if part and (not parts or parts[-1] != part):
                     parts.append(part)
-            headers.append("/".join(parts) or f"列{column_index + 1}")
+            headers.append(parts or [f"列{column_index + 1}"])
         return headers
+
+    @staticmethod
+    def _title_header_row_count(table_ir: TableIR) -> int:
+        """Treat a leading full-width merged header as a title, not a field prefix."""
+        if table_ir.header_row_count <= 1:
+            return 0
+        for cell in table_ir.cells:
+            if (
+                cell.row == 0
+                and cell.column == 0
+                and cell.column_span >= table_ir.column_count
+                and cell.is_header
+                and cell.text
+            ):
+                return 1
+        return 0
+
+    def _table_title(self, table_ir: TableIR) -> str:
+        if table_ir.caption:
+            return table_ir.caption
+        if not self._title_header_row_count(table_ir):
+            return ""
+        return next(
+            (
+                cell.text
+                for cell in table_ir.cells
+                if cell.row == 0 and cell.column == 0 and cell.is_header and cell.text
+            ),
+            "",
+        )
+
+    @staticmethod
+    def _field_names(header_paths: list[list[str]]) -> list[str]:
+        """Use the shortest unique suffix so row data stays compact but unambiguous."""
+        names: list[str] = []
+        for index, path in enumerate(header_paths):
+            selected = path[-1]
+            for width in range(1, len(path) + 1):
+                candidate = "/".join(path[-width:])
+                if sum(
+                    1
+                    for other in header_paths
+                    if "/".join(other[-width:]) == candidate
+                ) == 1:
+                    selected = candidate
+                    break
+            if selected in names:
+                selected = f"{selected}(列{index + 1})"
+            names.append(selected)
+        return names
+
+    @staticmethod
+    def _render_header_summary(header_paths: list[list[str]]) -> list[str]:
+        groups: dict[str, list[str]] = {}
+        for path in header_paths:
+            root = path[0]
+            child = "/".join(path[1:])
+            if root not in groups:
+                groups[root] = []
+            if child and child not in groups[root]:
+                groups[root].append(child)
+        return [
+            f"{root}：{'、'.join(children)}" if children else root
+            for root, children in groups.items()
+        ]
+
+    @staticmethod
+    def _escape_rag_field(field: str) -> str:
+        return field.replace(" | ", " \\| ")
 
     def _render_cell_value(self, cell: TableCellIR, child_ids: list[str]) -> str:
         parts: list[str] = []
@@ -318,16 +396,75 @@ class HtmlTableProcessor:
         parts.extend(f"嵌套表格：{child_id}" for child_id in child_ids)
         return "；".join(parts)
 
+    def _build_preview_tables(self, table_ir: TableIR, table_id: str) -> list[dict]:
+        child_refs: dict[tuple[int, int], str] = {}
+        child_tables: list[tuple[str, TableIR]] = []
+        child_number = 0
+        for cell_index, cell in enumerate(table_ir.cells):
+            for nested_index, nested_table in enumerate(cell.nested_tables):
+                child_number += 1
+                child_id = f"{table_id}-{child_number:03d}"
+                child_refs[(cell_index, nested_index)] = child_id
+                child_tables.append((child_id, nested_table))
+
+        cells: list[dict] = []
+        for cell_index, cell in enumerate(table_ir.cells):
+            child_ids = [
+                child_refs[(cell_index, nested_index)]
+                for nested_index in range(len(cell.nested_tables))
+            ]
+            cells.append(
+                {
+                    "row": cell.row,
+                    "column": cell.column,
+                    "row_span": cell.row_span,
+                    "column_span": cell.column_span,
+                    "is_header": cell.is_header,
+                    "markdown": self._preview_cell_markdown(cell, child_ids),
+                }
+            )
+        preview = {
+            "id": table_id,
+            "schema": "table-ir-preview-v1",
+            "row_count": table_ir.row_count,
+            "column_count": table_ir.column_count,
+            "header_row_count": table_ir.header_row_count,
+            "caption": table_ir.caption,
+            "cells": cells,
+        }
+        previews = [preview]
+        for child_id, nested_table in child_tables:
+            previews.extend(self._build_preview_tables(nested_table, child_id))
+        return previews
+
     @staticmethod
+    def _preview_cell_markdown(cell: TableCellIR, child_ids: list[str]) -> str:
+        value = cell.text
+        for label, href in cell.links:
+            link_label = label or "链接"
+            link = f"[{link_label}]({href})"
+            if label and label in value:
+                value = value.replace(label, link, 1)
+            else:
+                value = "；".join(part for part in (value, link) if part)
+        extras = [
+            f"![表格图片{index}]({source})"
+            for index, source in enumerate(cell.image_sources, start=1)
+        ]
+        extras.extend(f"嵌套表格：{child_id}" for child_id in child_ids)
+        return "；".join(part for part in [value, *extras] if part)
+
     def _render_context(
+        self,
         table_ir: TableIR,
         *,
         page_number: int | None,
         heading_path: list[str],
     ) -> list[str]:
         context: list[str] = []
-        if table_ir.caption:
-            context.append(f"表格：{table_ir.caption}")
+        table_title = self._table_title(table_ir)
+        if table_title:
+            context.append(f"表格：{table_title}")
         if heading_path:
             context.append("章节：" + " / ".join(heading_path))
         if page_number is not None:

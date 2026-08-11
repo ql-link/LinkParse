@@ -7,6 +7,7 @@ from app.core.errors import LinkParseError
 
 ALLOWED_TYPES = {
     "application/pdf": ".pdf",
+    "application/msword": ".doc",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
     "image/png": ".png",
     "image/jpeg": ".jpg",
@@ -14,7 +15,9 @@ ALLOWED_TYPES = {
     "image/tiff": ".tiff",
 }
 
+DOC_MEDIA_TYPE = "application/msword"
 DOCX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+OLE_COMPOUND_FILE_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
 DOCX_MAIN_CONTENT_TYPE = (
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"
 )
@@ -35,6 +38,8 @@ def sniff_media_type(header: bytes, filename: str | None = None) -> str | None:
         return "image/tiff"
     if len(header) >= 12 and header[:4] == b"RIFF" and header[8:12] == b"WEBP":
         return "image/webp"
+    if header.startswith(OLE_COMPOUND_FILE_MAGIC) and Path(filename or "").suffix.lower() == ".doc":
+        return DOC_MEDIA_TYPE
     if header.startswith((b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08")) and Path(
         filename or ""
     ).suffix.lower() == ".docx":

@@ -6,7 +6,7 @@
     <meta name="description" content="LinkParse 文档解析工作台">
     <title>LinkParse · 文档解析控制台</title>
     <link rel="stylesheet" href="/assets/vendor/phosphor/phosphor.css?v=2.1.2">
-    <link rel="stylesheet" href="/assets/styles.css?v=20260802h">
+    <link rel="stylesheet" href="/assets/styles.css?v=20260811a">
   </head>
   <body class="auth-pending">
     <section class="auth-gate" id="auth-gate" aria-labelledby="auth-title">
@@ -22,7 +22,7 @@
             <p>从上传、解析到结构化结果，全流程留痕。账户权限、API Key 与运行策略各自清晰分工。</p>
           </div>
           <div class="auth-flow" aria-label="文档解析流程">
-            <div><span><i class="ph ph-upload-simple" aria-hidden="true"></i></span><strong>上传文档</strong><small>PDF、DOCX、扫描件与图片</small></div>
+            <div><span><i class="ph ph-upload-simple" aria-hidden="true"></i></span><strong>上传文档</strong><small>PDF、DOC/DOCX、扫描件与图片</small></div>
             <i class="ph ph-arrow-right" aria-hidden="true"></i>
             <div><span><i class="ph ph-cpu" aria-hidden="true"></i></span><strong>智能解析</strong><small>结构解析或 OCR</small></div>
             <i class="ph ph-arrow-right" aria-hidden="true"></i>
@@ -94,18 +94,18 @@
             <input type="hidden" id="parse-api-key" autocomplete="off">
             <span class="sr-only" id="parse-auth-hint">登录会话已启用</span>
             <label class="hero-drop" id="dropzone">
-              <input type="file" id="parse-file" accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.tif,.tiff" required>
+              <input type="file" id="parse-file" accept=".pdf,.doc,application/msword,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.png,.jpg,.jpeg,.webp,.tif,.tiff" required>
               <span class="upload-icon"><i class="ph ph-file-arrow-up" aria-hidden="true"></i></span>
               <strong id="file-label">上传文档</strong>
-              <p>将 PDF、DOCX 或图片拖到此处，或 <u>点击选择文件</u></p>
-              <small>支持 PDF、DOCX、PNG、JPG、JPEG，最大 <b id="drop-limit">—</b></small>
+              <p>将 PDF、DOC、DOCX 或图片拖到此处，或 <u>点击选择文件</u></p>
+              <small>支持 PDF、DOC、DOCX、PNG、JPG、JPEG，最大 <b id="drop-limit">—</b></small>
             </label>
 
             <section class="parse-options" aria-labelledby="parse-options-title">
               <div class="section-title"><div><h2 id="parse-options-title">解析选项</h2><p>默认配置适用于大多数文档</p></div><button type="button" class="advanced-toggle" id="advanced-toggle" aria-expanded="false" aria-controls="advanced-options"><i class="ph ph-sliders-horizontal" aria-hidden="true"></i><span>更多高级选项</span><i class="ph ph-caret-down" aria-hidden="true"></i></button></div>
               <div class="option-grid">
                 <div class="field"><span>PDF 解析管线</span><strong>OpenDataLoader + 按页 OCR</strong><small>先结构化解析，再由质量门禁选择需要 OCR 的页面</small></div>
-                <fieldset class="format-field" id="parse-formats"><legend>输出格式 <em>*</em> · DOCX 固定为 Markdown</legend><div><label><input type="checkbox" value="text" checked><span>Text</span></label><label><input type="checkbox" value="json" checked><span>JSON</span></label><label><input type="checkbox" value="markdown"><span>Markdown</span></label><label><input type="checkbox" value="html"><span>HTML</span></label></div></fieldset>
+                <fieldset class="format-field" id="parse-formats"><legend>输出格式 <em>*</em> · Word 固定为 Markdown</legend><div><label><input type="checkbox" value="text" checked><span>Text</span></label><label><input type="checkbox" value="json" checked><span>JSON</span></label><label><input type="checkbox" value="markdown"><span>Markdown</span></label><label><input type="checkbox" value="html"><span>HTML</span></label></div></fieldset>
               </div>
               <div class="advanced-options" id="advanced-options" hidden>
                 <label class="field checkbox-field"><span>识别信息</span><span class="check-control"><input type="checkbox" id="parse-bbox" checked><b>返回坐标与置信度</b></span></label>
@@ -123,7 +123,7 @@
           </section>
 
           <section class="result-surface" aria-live="polite">
-            <div class="section-title"><div><h2>解析结果</h2><p>ParseResponse · application/json</p></div><button class="secondary-action" id="copy-result" disabled><i class="ph ph-copy" aria-hidden="true"></i>复制 JSON</button></div>
+            <div class="section-title"><div><h2>解析结果</h2><p>ParseResponse · application/json</p></div><div class="result-actions"><button class="secondary-action" id="preview-markdown" disabled><i class="ph ph-eye" aria-hidden="true"></i>预览 Markdown</button><button class="secondary-action" id="copy-result" disabled><i class="ph ph-copy" aria-hidden="true"></i>复制 JSON</button></div></div>
             <div class="result-empty" id="result-empty"><i class="ph ph-brackets-curly" aria-hidden="true"></i><strong>等待解析结果</strong><p>提交请求后，响应内容与耗时会显示在这里。</p></div>
             <div class="result-content hidden" id="result-content"><div class="result-summary" id="result-summary"></div><div class="asset-gallery hidden" id="asset-gallery"></div><pre><code id="result-json"></code></pre></div>
           </section>
@@ -177,7 +177,7 @@
             <article class="guide-article" id="guide-async"><span class="article-index">03 · ASYNC</span><h2>异步处理大文档</h2><p>创建任务后轮询状态，成功后读取结果。</p><pre><code>curl -X POST <span class="guide-origin">http://localhost:8080</span>/v1/jobs \
   -H "Authorization: Bearer &lt;API_KEY&gt;" \
   -F "file=@scan.pdf"</code></pre></article>
-            <article class="guide-article" id="guide-routing"><span class="article-index">04 · PIPELINE</span><h2>格式解析管线</h2><div class="routing-list"><div><strong>DOCX</strong><span>Mammoth + 语义 HTML</span></div><div><strong>图片</strong><span>RapidOCR</span></div><div><strong>文本型 PDF</strong><span>OpenDataLoader + 0 页 OCR</span></div><div><strong>扫描 PDF</strong><span>OpenDataLoader + 全页 OCR</span></div><div><strong>混合 PDF</strong><span>OpenDataLoader + 部分页 OCR</span></div></div></article>
+            <article class="guide-article" id="guide-routing"><span class="article-index">04 · PIPELINE</span><h2>格式解析管线</h2><div class="routing-list"><div><strong>DOC / DOCX</strong><span>DOC 经 LibreOffice 转换后进入 Mammoth + 语义 HTML</span></div><div><strong>图片</strong><span>RapidOCR</span></div><div><strong>文本型 PDF</strong><span>OpenDataLoader + 0 页 OCR</span></div><div><strong>扫描 PDF</strong><span>OpenDataLoader + 全页 OCR</span></div><div><strong>混合 PDF</strong><span>OpenDataLoader + 部分页 OCR</span></div></div></article>
             <article class="guide-article" id="guide-errors"><span class="article-index">05 · ERRORS</span><h2>追踪失败请求</h2><p>业务错误包含稳定错误码和 request_id，便于调用方重试和服务端定位。</p><pre><code>{ "error": { "code": "FILE_TOO_LARGE", "request_id": "req_..." } }</code></pre></article>
           </div></div>
         </section>
@@ -186,9 +186,11 @@
 
     <dialog class="modal-dialog" id="key-name-dialog" aria-labelledby="key-name-title"><form class="modal-card" id="key-name-form"><button class="dialog-close" id="key-name-close" type="button" aria-label="关闭"><i class="ph ph-x" aria-hidden="true"></i></button><span class="modal-icon"><i class="ph ph-key" aria-hidden="true"></i></span><h2 id="key-name-title">申请 API Key</h2><p>使用清晰名称区分调用方，例如“生产服务”或“本地脚本”。</p><label class="field"><span>Key 名称</span><input name="name" maxlength="80" value="默认 Key" autocomplete="off" required></label><p class="form-error" id="key-name-error" role="alert"></p><button class="primary-action wide" type="submit">生成 API Key</button></form></dialog>
     <dialog class="modal-dialog" id="key-dialog"><div class="modal-card key-reveal"><button class="dialog-close" id="key-close" aria-label="关闭"><i class="ph ph-x" aria-hidden="true"></i></button><span class="modal-icon"><i class="ph ph-check-circle" aria-hidden="true"></i></span><h2>API Key 已生成</h2><p>这是唯一一次完整显示，请立即复制并妥善保存。</p><code id="new-key-value"></code><button class="primary-action wide" id="copy-new-key"><i class="ph ph-copy" aria-hidden="true"></i>复制 API Key</button></div></dialog>
+    <dialog class="markdown-preview-dialog" id="markdown-preview-dialog" aria-labelledby="markdown-preview-title"><div class="markdown-preview-card"><header><div><span>MARKDOWN PREVIEW</span><h2 id="markdown-preview-title">Markdown 渲染预览</h2></div><button class="dialog-close" id="markdown-preview-close" type="button" aria-label="关闭 Markdown 预览"><i class="ph ph-x" aria-hidden="true"></i></button></header><article class="markdown-preview-body" id="markdown-preview-content"></article></div></dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="/assets/vendor/markdown-it/markdown-it.umd.min.js?v=15.0.0" defer></script>
     <script src="/assets/fluid.js?v=20260802c" defer></script>
     <script src="/assets/clipboard.js?v=20260802a" defer></script>
-    <script src="/assets/app.js?v=20260802f" defer></script>
+    <script src="/assets/app.js?v=20260811e" defer></script>
   </body>
 </html>

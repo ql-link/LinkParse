@@ -16,3 +16,9 @@ def test_opendataloader_table_method_is_normalized():
 def test_opendataloader_table_method_rejects_unknown_value():
     with pytest.raises(ValidationError):
         Settings(opendataloader_table_method="fast")
+
+
+def test_doc_conversion_timeout_is_bounded():
+    assert Settings(doc_conversion_timeout_seconds=10).doc_conversion_timeout_seconds == 10
+    with pytest.raises(ValidationError):
+        Settings(doc_conversion_timeout_seconds=9)

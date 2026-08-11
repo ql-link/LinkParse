@@ -22,16 +22,18 @@ def service_info(settings: Annotated[Settings, Depends(get_effective_settings)])
         "word_pipeline": {
             "name": "mammoth_word",
             "primary": "mammoth",
+            "legacy_doc_conversion": "libreoffice_to_docx",
             "intermediate": "semantic_html",
             "formula_preprocessing": "omml_to_latex",
             "table_strategy": "simple_gfm_complex_rag_text",
-            "table_schema": "table-rag-v1",
+            "table_schema": "table-rag-v2",
+            "table_preview_schema": "table-ir-preview-v1",
             "output_formats": ["markdown"],
             "pagination_supported": True,
             "pagination_source": "saved_docx_page_breaks",
             "bbox_supported": False,
         },
-        "input_types": ["PDF", "DOCX", "PNG", "JPEG", "WebP", "TIFF"],
+        "input_types": ["PDF", "DOC", "DOCX", "PNG", "JPEG", "WebP", "TIFF"],
         "output_formats": ["text", "json", "markdown", "html"],
         "image_output": {
             "enabled_by": "include_images=true",
@@ -53,6 +55,7 @@ def service_info(settings: Annotated[Settings, Depends(get_effective_settings)])
         "limits": {
             "max_upload_mb": settings.max_upload_mb,
             "max_pdf_pages": settings.max_pdf_pages,
+            "doc_conversion_timeout_seconds": settings.doc_conversion_timeout_seconds,
             "result_ttl_hours": settings.job_result_ttl_hours,
             "concurrency": {
                 "rapidocr": settings.ocr_max_concurrency,
