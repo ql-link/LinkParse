@@ -29,6 +29,9 @@ def test_console_is_available_with_security_headers():
     ) in response.text
     assert "OpenDataLoader + 按页 OCR" in response.text
     assert 'src="/assets/clipboard.js' in response.text
+    assert 'id="preview-markdown" disabled' in response.text
+    assert 'id="markdown-preview-dialog"' in response.text
+    assert 'src="/assets/vendor/markdown-it/markdown-it.umd.min.js?v=15.0.0"' in response.text
     assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
 
 
@@ -47,6 +50,12 @@ def test_clipboard_helper_has_http_compatible_fallback():
     assert response.status_code == 200
     assert "navigator.clipboard?.writeText" in response.text
     assert 'document.execCommand("copy")' in response.text
+
+
+def test_markdown_preview_renderer_is_served_locally():
+    response = client.get("/assets/vendor/markdown-it/markdown-it.umd.min.js")
+    assert response.status_code == 200
+    assert "markdownit" in response.text
 
 
 def test_openapi_schema_remains_available_for_tooling():

@@ -12,6 +12,9 @@ const state = {
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const fluid = window.LinkParseFluid;
+const markdownRenderer = typeof window.markdownit === "function"
+  ? window.markdownit({ html: false, linkify: true, typographer: false })
+  : null;
 let viewSequence = 0;
 let guideSequence = 0;
 
@@ -465,6 +468,8 @@ function renderResult(payload) {
   $("#result-empty").classList.add("hidden");
   $("#result-content").classList.remove("hidden");
   $("#copy-result").disabled = false;
+  const markdown = payload.outputs?.markdown;
+  $("#preview-markdown").disabled = typeof markdown !== "string" || !markdown.trim();
   const summary = $("#result-summary");
   summary.replaceChildren();
   [
@@ -498,6 +503,30 @@ function renderResult(payload) {
   $("#result-json").textContent = JSON.stringify(payload, null, 2);
   fluid.setNow($("#result-content"), { opacity: 0, y: 12, scale: .99 });
   fluid.springTo($("#result-content"), { opacity: 1, y: 0, scale: 1 }, { stiffness: 700, damping: 53 });
+}
+
+function openMarkdownPreview() {
+  const markdown = state.lastResult?.outputs?.markdown;
+  if (typeof markdown !== "string" || !markdown.trim()) {
+    showToast("当前结果没有 Markdown 产物", true);
+    return;
+  }
+  if (!markdownRenderer) {
+    showToast("Markdown 渲染器加载失败", true);
+    return;
+  }
+  const preview = $("#markdown-preview-content");
+  const displayMarkdown = markdown.replace(/<!--[\s\S]*?-->/g, "");
+  preview.innerHTML = markdownRenderer.render(displayMarkdown);
+  $$('a', preview).forEach((link) => {
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+  });
+  $$('img', preview).forEach((image) => {
+    image.loading = "lazy";
+    image.referrerPolicy = "no-referrer";
+  });
+  $("#markdown-preview-dialog").showModal();
 }
 
 async function submitParse(event) {
@@ -693,6 +722,8 @@ function bindInteractions() {
   $("#refresh-records").addEventListener("click", () => loadRecords(false));
   $("#load-more-records").addEventListener("click", () => loadRecords(true));
   $("#key-close").addEventListener("click", () => $("#key-dialog").close());
+  $("#preview-markdown").addEventListener("click", openMarkdownPreview);
+  $("#markdown-preview-close").addEventListener("click", () => $("#markdown-preview-dialog").close());
   $("#copy-new-key").addEventListener("click", async () => {
     if (await window.LinkParseClipboard.copyText($("#new-key-value").textContent)) {
       showToast("API Key 已复制");

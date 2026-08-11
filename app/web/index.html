@@ -6,7 +6,7 @@
     <meta name="description" content="LinkParse 文档解析工作台">
     <title>LinkParse · 文档解析控制台</title>
     <link rel="stylesheet" href="/assets/vendor/phosphor/phosphor.css?v=2.1.2">
-    <link rel="stylesheet" href="/assets/styles.css?v=20260802h">
+    <link rel="stylesheet" href="/assets/styles.css?v=20260811a">
   </head>
   <body class="auth-pending">
     <section class="auth-gate" id="auth-gate" aria-labelledby="auth-title">
@@ -123,7 +123,7 @@
           </section>
 
           <section class="result-surface" aria-live="polite">
-            <div class="section-title"><div><h2>解析结果</h2><p>ParseResponse · application/json</p></div><button class="secondary-action" id="copy-result" disabled><i class="ph ph-copy" aria-hidden="true"></i>复制 JSON</button></div>
+            <div class="section-title"><div><h2>解析结果</h2><p>ParseResponse · application/json</p></div><div class="result-actions"><button class="secondary-action" id="preview-markdown" disabled><i class="ph ph-eye" aria-hidden="true"></i>预览 Markdown</button><button class="secondary-action" id="copy-result" disabled><i class="ph ph-copy" aria-hidden="true"></i>复制 JSON</button></div></div>
             <div class="result-empty" id="result-empty"><i class="ph ph-brackets-curly" aria-hidden="true"></i><strong>等待解析结果</strong><p>提交请求后，响应内容与耗时会显示在这里。</p></div>
             <div class="result-content hidden" id="result-content"><div class="result-summary" id="result-summary"></div><div class="asset-gallery hidden" id="asset-gallery"></div><pre><code id="result-json"></code></pre></div>
           </section>
@@ -186,9 +186,11 @@
 
     <dialog class="modal-dialog" id="key-name-dialog" aria-labelledby="key-name-title"><form class="modal-card" id="key-name-form"><button class="dialog-close" id="key-name-close" type="button" aria-label="关闭"><i class="ph ph-x" aria-hidden="true"></i></button><span class="modal-icon"><i class="ph ph-key" aria-hidden="true"></i></span><h2 id="key-name-title">申请 API Key</h2><p>使用清晰名称区分调用方，例如“生产服务”或“本地脚本”。</p><label class="field"><span>Key 名称</span><input name="name" maxlength="80" value="默认 Key" autocomplete="off" required></label><p class="form-error" id="key-name-error" role="alert"></p><button class="primary-action wide" type="submit">生成 API Key</button></form></dialog>
     <dialog class="modal-dialog" id="key-dialog"><div class="modal-card key-reveal"><button class="dialog-close" id="key-close" aria-label="关闭"><i class="ph ph-x" aria-hidden="true"></i></button><span class="modal-icon"><i class="ph ph-check-circle" aria-hidden="true"></i></span><h2>API Key 已生成</h2><p>这是唯一一次完整显示，请立即复制并妥善保存。</p><code id="new-key-value"></code><button class="primary-action wide" id="copy-new-key"><i class="ph ph-copy" aria-hidden="true"></i>复制 API Key</button></div></dialog>
+    <dialog class="markdown-preview-dialog" id="markdown-preview-dialog" aria-labelledby="markdown-preview-title"><div class="markdown-preview-card"><header><div><span>MARKDOWN PREVIEW</span><h2 id="markdown-preview-title">Markdown 渲染预览</h2></div><button class="dialog-close" id="markdown-preview-close" type="button" aria-label="关闭 Markdown 预览"><i class="ph ph-x" aria-hidden="true"></i></button></header><article class="markdown-preview-body" id="markdown-preview-content"></article></div></dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="/assets/vendor/markdown-it/markdown-it.umd.min.js?v=15.0.0" defer></script>
     <script src="/assets/fluid.js?v=20260802c" defer></script>
     <script src="/assets/clipboard.js?v=20260802a" defer></script>
-    <script src="/assets/app.js?v=20260802f" defer></script>
+    <script src="/assets/app.js?v=20260811a" defer></script>
   </body>
 </html>
