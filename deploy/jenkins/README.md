@@ -7,8 +7,8 @@ LinkParse 使用与 LinkCV Development 相同的两机部署拓扑：
 3. Primary 在临时目录构建 `test` 阶段并运行 `pytest`。
 4. 测试通过后构建 `linkparse:<commit>-b<build>`，更新 `/opt/tolink/linkparse` 的 Compose 服务。
 5. API 重建后刷新 Nginx，避免代理继续使用旧容器地址。
-6. `/health` 确认解析引擎与 MySQL 均可用，`/v1/info` 声明支持 DOCX，前端上传框包含
-   `.docx`，且注册路由已生效后流水线才结束。
+6. `/health` 确认解析引擎（含 LibreOffice）与 MySQL 均可用，`/v1/info` 声明支持 DOC/DOCX，
+   前端上传框包含 `.doc` 和 `.docx`，且注册路由已生效后流水线才结束。
 
 Primary 已启用 `linkparse-after-tailscale.service`。主机重启后，该单元会等待
 `tailscale-online.target`，确认 `tailscale0` 已获得 `100.86.10.52`，再恢复

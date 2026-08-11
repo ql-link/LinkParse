@@ -23,7 +23,7 @@ def test_console_is_available_with_security_headers():
     assert 'id="parse-ocr"' not in response.text
     assert 'id="parse-dpi"' not in response.text
     assert (
-        'accept=".pdf,.docx,'
+        'accept=".pdf,.doc,application/msword,.docx,'
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document,'
         '.png,.jpg,.jpeg,.webp,.tif,.tiff"'
     ) in response.text
@@ -80,6 +80,11 @@ def test_public_info_describes_service_limits():
     assert response.status_code == 200
     assert response.json()["version"] == "0.2.0"
     assert response.json()["limits"]["pdf_quality"]["fallback_render_dpi"] == 280
+    assert response.json()["input_types"][:3] == ["PDF", "DOC", "DOCX"]
+    assert response.json()["limits"]["doc_conversion_timeout_seconds"] == 120
+    assert response.json()["word_pipeline"]["legacy_doc_conversion"] == (
+        "libreoffice_to_docx"
+    )
     assert response.json()["limits"]["concurrency"] == {
         "rapidocr": 1,
         "opendataloader": 3,

@@ -20,7 +20,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 COPY --from=java-runtime /opt/java/openjdk /opt/java/openjdk
 COPY --from=python-dependencies /install /usr/local
-RUN java -version
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libreoffice-writer \
+    && rm -rf /var/lib/apt/lists/* \
+    && java -version \
+    && soffice --version
 
 WORKDIR /app
 COPY app ./app

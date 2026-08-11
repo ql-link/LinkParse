@@ -447,8 +447,12 @@ async function loadPublicInfo() {
   }
 }
 
+function isWordFile(file) {
+  return Boolean(file && /\.docx?$/i.test(file.name));
+}
+
 function updateFileLabel(file) {
-  const isWord = Boolean(file?.name.toLowerCase().endsWith(".docx"));
+  const isWord = isWordFile(file);
   $$('#parse-formats input[type="checkbox"]').forEach((input) => {
     input.disabled = isWord && input.value !== "markdown";
     if (isWord) input.checked = input.value === "markdown";
@@ -542,7 +546,7 @@ async function submitParse(event) {
     showToast("请先登录，或填写 API Key", true);
     return;
   }
-  const isWord = file.name.toLowerCase().endsWith(".docx");
+  const isWord = isWordFile(file);
   const formats = isWord
     ? ["markdown"]
     : $$('#parse-formats input[type="checkbox"]:checked').map((item) => item.value);

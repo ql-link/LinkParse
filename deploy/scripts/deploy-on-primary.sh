@@ -136,8 +136,8 @@ for _ in $(seq 1 45); do
   health_status="$(docker inspect --format='{{.State.Health.Status}}' linkparse-api-1 2>/dev/null || true)"
   if [[ "${health_status}" == "healthy" ]] && \
     curl -fsS "${http_url}/health" | python3 -c 'import json, sys; payload = json.load(sys.stdin); assert payload["status"] == "ok"; assert payload["database"] == {"configured": True, "available": True}' && \
-    curl -fsS "${http_url}/v1/info" | python3 -c 'import json, sys; assert "DOCX" in json.load(sys.stdin)["input_types"]' && \
-    curl -fsS "${http_url}/" | grep -F 'id="parse-file"' | grep -Fq '.docx' && \
+    curl -fsS "${http_url}/v1/info" | python3 -c 'import json, sys; types = json.load(sys.stdin)["input_types"]; assert "DOC" in types and "DOCX" in types' && \
+    curl -fsS "${http_url}/" | grep -F 'id="parse-file"' | grep -Fq '.doc,application/msword,.docx' && \
     [[ "$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data '{}' "${http_url}/v1/auth/register")" == "422" ]]; then
     cat >"${deploy_dir}/.deployment" <<EOF
 image=${image}:${tag}
