@@ -509,6 +509,232 @@ function renderResult(payload) {
   fluid.springTo($("#result-content"), { opacity: 1, y: 0, scale: 1 }, { stiffness: 700, damping: 53 });
 }
 
+function appendMarkdownPreviewFragment(parent, source) {
+  const markdown = source.replace(/<!--[\s\S]*?-->/g, "").trim();
+  if (!markdown) return;
+  const fragment = document.createElement("div");
+  fragment.className = "markdown-preview-fragment";
+  fragment.innerHTML = markdownRenderer.render(markdown);
+  parent.append(fragment);
+}
+
+function tableMarkerAttributes(source) {
+  return Object.fromEntries(
+    [...source.matchAll(/([\w-]+)="([^"]*)"/g)].map((match) => [match[1], match[2]])
+  );
+}
+
+function splitRagFields(source) {
+  const fields = [];
+  let start = 0;
+  for (let index = 0; index <= source.length - 3; index += 1) {
+    if (source.slice(index, index + 3) === " | ") {
+      fields.push(source.slice(start, index));
+      start = index + 3;
+      index += 2;
+    }
+  }
+  fields.push(source.slice(start));
+  return fields.map((field) => {
+    const separator = field.indexOf("：");
+    if (separator < 1) return null;
+    return [field.slice(0, separator).trim(), field.slice(separator + 1).trim()];
+  }).filter(Boolean);
+}
+
+function ragTableContext(source) {
+  const context = [];
+  for (const rawLine of source.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (line === "表头：" || line === "数据：") break;
+    if (line.startsWith("章节：") || line.startsWith("页码：")) context.push(line);
+  }
+  return context;
+}
+
+function createOriginalTablePreview(source, structure) {
+  if (
+    structure?.schema !== "table-ir-preview-v1"
+    || !Array.isArray(structure.cells)
+    || !Number.isInteger(structure.row_count)
+    || structure.row_count < 1
+    || structure.row_count > 256
+  ) return null;
+
+  const preview = document.createElement("section");
+  preview.className = "original-table-preview";
+  const context = ragTableContext(source);
+  if (context.length) {
+    const metadata = document.createElement("p");
+    metadata.className = "original-table-context";
+    metadata.innerHTML = context.map((item) => markdownRenderer.renderInline(item)).join("<span>·</span>");
+    preview.append(metadata);
+  }
+
+  const scroller = document.createElement("div");
+  scroller.className = "original-table-scroll";
+  const table = document.createElement("table");
+  table.className = "original-table";
+  if (structure.caption) {
+    const caption = document.createElement("caption");
+    caption.textContent = structure.caption;
+    table.append(caption);
+  }
+  const cellsByRow = new Map();
+  structure.cells.forEach((cell) => {
+    if (!Number.isInteger(cell.row) || cell.row < 0 || cell.row >= structure.row_count) return;
+    if (!cellsByRow.has(cell.row)) cellsByRow.set(cell.row, []);
+    cellsByRow.get(cell.row).push(cell);
+  });
+  for (let rowIndex = 0; rowIndex < structure.row_count; rowIndex += 1) {
+    const row = document.createElement("tr");
+    const cells = (cellsByRow.get(rowIndex) || []).sort((left, right) => left.column - right.column);
+    cells.forEach((sourceCell) => {
+      const cell = document.createElement(sourceCell.is_header ? "th" : "td");
+      const rowSpan = Math.max(1, Math.min(256, Number(sourceCell.row_span) || 1));
+      const columnSpan = Math.max(1, Math.min(256, Number(sourceCell.column_span) || 1));
+      if (rowSpan > 1) cell.rowSpan = rowSpan;
+      if (columnSpan > 1) cell.colSpan = columnSpan;
+      if (sourceCell.is_header) {
+        cell.scope = rowIndex < structure.header_row_count ? "col" : "row";
+      }
+      cell.innerHTML = markdownRenderer.renderInline(sourceCell.markdown || "");
+      row.append(cell);
+    });
+    table.append(row);
+  }
+  scroller.append(table);
+  preview.append(scroller);
+  return preview;
+}
+
+function createRagTablePreview(source, attributes) {
+  const lines = source.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const card = document.createElement("section");
+  card.className = "rag-table-card";
+  card.dataset.tableId = attributes.id || "";
+  let section = "context";
+  let title = "";
+  const context = [];
+  const headers = [];
+  const rows = [];
+
+  lines.forEach((line) => {
+    if (line === "表头：") { section = "headers"; return; }
+    if (line === "数据：") { section = "data"; return; }
+    if (section === "context") {
+      if (line.startsWith("表格：")) title = line.slice(3).trim();
+      else context.push(line);
+      return;
+    }
+    if (section === "headers" && line.startsWith("- ")) {
+      headers.push(line.slice(2).trim());
+      return;
+    }
+    if (section === "data") {
+      const rowMatch = line.match(/^-\s*行(\d+)：([\s\S]*)$/);
+      if (rowMatch) rows.push({ index: rowMatch[1], fields: splitRagFields(rowMatch[2]) });
+    }
+  });
+
+  const heading = document.createElement("header");
+  const headingText = document.createElement("div");
+  const eyebrow = document.createElement("span");
+  const headingTitle = document.createElement("h3");
+  eyebrow.textContent = `COMPLEX TABLE · ${attributes.id || "TABLE"}`;
+  headingTitle.textContent = title || "复杂表格";
+  headingText.append(eyebrow, headingTitle);
+  heading.append(headingText);
+  if (context.length) {
+    const metadata = document.createElement("div");
+    metadata.className = "rag-table-context";
+    context.forEach((item) => {
+      const badge = document.createElement("span");
+      badge.innerHTML = markdownRenderer.renderInline(item);
+      metadata.append(badge);
+    });
+    heading.append(metadata);
+  }
+  card.append(heading);
+
+  if (headers.length) {
+    const hierarchy = document.createElement("div");
+    hierarchy.className = "rag-table-hierarchy";
+    const label = document.createElement("strong");
+    const list = document.createElement("ul");
+    label.textContent = "表头层级";
+    headers.forEach((item) => {
+      const entry = document.createElement("li");
+      entry.textContent = item;
+      list.append(entry);
+    });
+    hierarchy.append(label, list);
+    card.append(hierarchy);
+  }
+
+  const columns = [];
+  rows.forEach((row) => row.fields.forEach(([name]) => {
+    if (!columns.includes(name)) columns.push(name);
+  }));
+  if (rows.length && columns.length) {
+    const scroller = document.createElement("div");
+    scroller.className = "rag-table-scroll";
+    const table = document.createElement("table");
+    const thead = document.createElement("thead");
+    const headerRow = document.createElement("tr");
+    const rowHeader = document.createElement("th");
+    rowHeader.textContent = "行";
+    headerRow.append(rowHeader);
+    columns.forEach((column) => {
+      const cell = document.createElement("th");
+      cell.textContent = column;
+      headerRow.append(cell);
+    });
+    thead.append(headerRow);
+    table.append(thead);
+    const tbody = document.createElement("tbody");
+    rows.forEach((row) => {
+      const tableRow = document.createElement("tr");
+      const indexCell = document.createElement("th");
+      indexCell.scope = "row";
+      indexCell.textContent = row.index;
+      tableRow.append(indexCell);
+      const values = Object.fromEntries(row.fields);
+      columns.forEach((column) => {
+        const cell = document.createElement("td");
+        cell.innerHTML = markdownRenderer.renderInline(values[column] || "—");
+        tableRow.append(cell);
+      });
+      tbody.append(tableRow);
+    });
+    table.append(tbody);
+    scroller.append(table);
+    card.append(scroller);
+  } else {
+    appendMarkdownPreviewFragment(card, source);
+  }
+  return card;
+}
+
+function renderMarkdownPreview(markdown, preview, tablePreviews = []) {
+  preview.replaceChildren();
+  const previewById = new Map(tablePreviews.map((item) => [item.id, item]));
+  const marker = /<!--\s*LINKPARSE_TABLE_START\b([^>]*)-->([\s\S]*?)<!--\s*LINKPARSE_TABLE_END\b[^>]*-->/g;
+  let cursor = 0;
+  for (const match of markdown.matchAll(marker)) {
+    appendMarkdownPreviewFragment(preview, markdown.slice(cursor, match.index));
+    const attributes = tableMarkerAttributes(match[1]);
+    if (attributes.format === "rag_text" && attributes.schema === "table-rag-v2") {
+      const original = createOriginalTablePreview(match[2], previewById.get(attributes.id));
+      preview.append(original || createRagTablePreview(match[2], attributes));
+    } else {
+      appendMarkdownPreviewFragment(preview, match[2]);
+    }
+    cursor = match.index + match[0].length;
+  }
+  appendMarkdownPreviewFragment(preview, markdown.slice(cursor));
+}
+
 function openMarkdownPreview() {
   const markdown = state.lastResult?.outputs?.markdown;
   if (typeof markdown !== "string" || !markdown.trim()) {
@@ -520,8 +746,8 @@ function openMarkdownPreview() {
     return;
   }
   const preview = $("#markdown-preview-content");
-  const displayMarkdown = markdown.replace(/<!--[\s\S]*?-->/g, "");
-  preview.innerHTML = markdownRenderer.render(displayMarkdown);
+  const tablePreviews = state.lastResult?.meta?.word?.table_previews;
+  renderMarkdownPreview(markdown, preview, Array.isArray(tablePreviews) ? tablePreviews : []);
   $$('a', preview).forEach((link) => {
     link.target = "_blank";
     link.rel = "noopener noreferrer";

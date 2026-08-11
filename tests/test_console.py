@@ -32,6 +32,7 @@ def test_console_is_available_with_security_headers():
     assert 'id="preview-markdown" disabled' in response.text
     assert 'id="markdown-preview-dialog"' in response.text
     assert 'src="/assets/vendor/markdown-it/markdown-it.umd.min.js?v=15.0.0"' in response.text
+    assert 'src="/assets/app.js?v=20260811e"' in response.text
     assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
 
 
@@ -84,6 +85,9 @@ def test_public_info_describes_service_limits():
     assert response.json()["limits"]["doc_conversion_timeout_seconds"] == 120
     assert response.json()["word_pipeline"]["legacy_doc_conversion"] == (
         "libreoffice_to_docx"
+    )
+    assert response.json()["word_pipeline"]["table_preview_schema"] == (
+        "table-ir-preview-v1"
     )
     assert response.json()["limits"]["concurrency"] == {
         "rapidocr": 1,

@@ -81,3 +81,4 @@ class TableRenderResult:
     warning: str | None = None
     image_count: int = 0
     warnings: list[str] = field(default_factory=list)
+    preview_tables: list[dict[str, Any]] = field(default_factory=list)

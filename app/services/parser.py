@@ -194,8 +194,13 @@ class DocumentParser:
                     pages=parsed.image_pages,
                 )
                 outputs = self.asset_storage.rewrite_outputs(outputs, replacements)
+                parsed_metadata = self.asset_storage.rewrite_outputs(
+                    parsed.metadata, replacements
+                )
+            else:
+                parsed_metadata = parsed.metadata
             metadata = {
-                **parsed.metadata,
+                **parsed_metadata,
                 "source_format": "doc" if legacy_doc else "docx",
                 "conversion": conversion.metadata if conversion else None,
             }

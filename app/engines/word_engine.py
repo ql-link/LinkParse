@@ -135,6 +135,7 @@ class WordEngine:
         markdown_table_count = 0
         rag_text_table_count = 0
         table_failure_count = 0
+        table_previews: list[dict] = []
         heading_path: list[str] = []
 
         for page_number, fragment in enumerate(page_fragments, start=1):
@@ -162,6 +163,7 @@ class WordEngine:
             markdown_table_count += renderer.markdown_table_count
             rag_text_table_count += renderer.rag_text_table_count
             table_failure_count += renderer.table_failure_count
+            table_previews.extend(renderer.table_previews)
             warnings.extend(renderer.warnings)
 
         markdown = "\n\n".join(markdown_pages)
@@ -188,8 +190,9 @@ class WordEngine:
             "table_ir_version": 1,
             "markdown_table_count": markdown_table_count,
             "rag_text_table_count": rag_text_table_count,
-            "rag_table_schema": "table-rag-v1",
+            "rag_table_schema": "table-rag-v2",
             "table_failure_count": table_failure_count,
+            "table_previews": table_previews,
             "image_count": len(image_paths),
             "omitted_image_count": omitted_images,
             "formula_count": formula_count,

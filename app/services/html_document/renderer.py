@@ -38,6 +38,7 @@ class HtmlMarkdownRenderer:
         self.rag_text_table_count = 0
         self.table_failure_count = 0
         self.table_irs: list[TableIR] = []
+        self.table_previews: list[dict] = []
         self._next_table_id = table_id_start
         self.page_number = page_number
         self.heading_path = list(initial_heading_path or [])
@@ -114,6 +115,7 @@ class HtmlMarkdownRenderer:
                 self.table_failure_count += 1
             if result.table_ir is not None:
                 self.table_irs.append(result.table_ir)
+            self.table_previews.extend(result.preview_tables)
             self.image_count += result.image_count
             self.warnings.extend(result.warnings)
             if result.warning:

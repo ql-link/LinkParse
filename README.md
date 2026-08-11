@@ -156,14 +156,17 @@ OMML 公式转 LaTeX → Mammoth 语义 HTML → DOM 清理 → Markdown
 
 标题、段落、粗体/斜体、链接、嵌套列表、表格和内嵌图片按文档顺序输出。简单表格转为
 GFM Markdown 表格；合并单元格、多级表头、嵌套表格、图片或多段单元格等复杂表格转为
-`table-rag-v1` 行级语义文本。多级表头使用 `/` 扁平化，纵向合并值在每个逻辑行中重复，
-每行都使用“列名：值”表达，便于 RAG 按完整行切片后独立检索。表格内图片保留为 Markdown
+`table-rag-v2` 行级语义文本。跨整表的合并标题与字段表头分离，多级表头只声明一次；
+数据行使用最短且不冲突的“列名：值”表达。纵向合并值仍在每个逻辑行中重复，
+便于 RAG 按完整行切片后独立检索，同时减少重复的表头路径。表格内图片保留为 Markdown
 图片链接，图片描述由下游 RAG 按需生成；嵌套表格拆成带父表引用的独立表格块。
 
 简单和复杂表格都使用合法的 `LINKPARSE_TABLE_START/END` HTML 注释成对标记边界；注释只供
 原始 Markdown 切片器识别，正文不依赖注释也能读取。解析器内部仍使用 TableIR 保存完整单元格
-和合并关系，但 `table-rag-v1` 是面向检索的有损表示：模型可据此恢复扁平化后的逻辑行列，不能
-无损恢复原 Word 的 `rowspan`、`colspan` 和视觉布局。只有 TableIR 构建失败时才保留安全 HTML
+和合并关系，但 `table-rag-v2` 是面向检索的有损表示：模型可据此恢复扁平化后的逻辑行列，不能
+无损恢复原 Word 的 `rowspan`、`colspan` 和视觉布局。API 另在 `meta.word.table_previews`
+返回 `table-ir-preview-v1` 坐标、合并范围和单元格内容，前端预览可据此恢复原始行列合并；
+该数据不写入 Markdown 正文，避免增加 RAG 切片 Token。只有 TableIR 构建失败时才保留安全 HTML
 兜底。解析器按照 Word 文档中保存的
 显式分页符和 `lastRenderedPageBreak` 顺序，从第 1 页开始编号；Markdown 使用
 `<!-- WORD_PAGE:n -->` 标记页序。`meta.page_count` 返回推导页数，`meta.word` 同时返回分页来源、
