@@ -53,6 +53,8 @@ class ConcurrencyLimiter:
             return self.settings.ocr_max_concurrency
         if engine == "opendataloader":
             return self.settings.opendataloader_max_concurrency
+        if engine == "word":
+            return self.settings.word_max_concurrency
         raise ValueError(f"Unknown concurrency engine: {engine}")
 
     def _key(self, engine: str) -> str:
@@ -145,7 +147,7 @@ class ConcurrencyLimiter:
         now_ms = int(time.time() * 1000)
         result = {"available": True, "engines": {}}
         try:
-            for engine in ("rapidocr", "opendataloader"):
+            for engine in ("rapidocr", "opendataloader", "word"):
                 key = self._key(engine)
                 self.redis.zremrangebyscore(key, "-inf", now_ms)
                 result["engines"][engine] = {
@@ -156,6 +158,6 @@ class ConcurrencyLimiter:
             result["available"] = False
             result["engines"] = {
                 engine: {"active": None, "limit": self.limit_for(engine)}
-                for engine in ("rapidocr", "opendataloader")
+                for engine in ("rapidocr", "opendataloader", "word")
             }
         return result

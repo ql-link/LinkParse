@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     task_time_limit_seconds: int = 300
     ocr_max_concurrency: int = Field(default=1, ge=1, le=32)
     opendataloader_max_concurrency: int = Field(default=3, ge=1, le=32)
+    word_max_concurrency: int = Field(default=2, ge=1, le=32)
     opendataloader_timeout_seconds: int = Field(default=300, ge=10, le=3600)
     opendataloader_table_method: str = "default"
     opendataloader_markdown_with_html: bool = False

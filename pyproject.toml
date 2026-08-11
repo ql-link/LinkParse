@@ -5,13 +5,17 @@ build-backend = "hatchling.build"
 [project]
 name = "linkparse"
 version = "0.2.0"
-description = "CPU-first document parsing service powered by OpenDataLoader and RapidOCR"
+description = "CPU-first document parsing service powered by OpenDataLoader, RapidOCR and Mammoth"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
 dependencies = [
+  "beautifulsoup4>=4.12,<5",
   "celery[redis]>=5.4,<6",
+  "defusedxml>=0.7,<1",
   "fastapi>=0.115,<1",
   "gunicorn>=23,<24",
+  "lxml>=5,<7",
+  "mammoth>=1.6,<2",
   "onnxruntime>=1.20,<2",
   "opendataloader-pdf>=2,<3",
   "oss2>=2.19,<3",
@@ -47,3 +51,8 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+"app/engines/docx_math/latex_dict.py" = ["ALL"]
+"app/engines/docx_math/omml.py" = ["ALL"]
+"tests/docx_factory.py" = ["E501"]

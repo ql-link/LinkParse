@@ -10,6 +10,7 @@ class ParseMeta(BaseModel):
     page_count: int
     duration_ms: int
     pdf: dict[str, Any] | None = None
+    word: dict[str, Any] | None = None
 
 
 class ParseAsset(BaseModel):
@@ -51,6 +52,7 @@ class RuntimeConfig(BaseModel):
     task_time_limit_seconds: int = Field(ge=30, le=3600)
     ocr_max_concurrency: int = Field(ge=1, le=32)
     opendataloader_max_concurrency: int = Field(ge=1, le=32)
+    word_max_concurrency: int = Field(ge=1, le=32)
     concurrency_wait_seconds: int = Field(ge=0, le=600)
     job_result_ttl_hours: int = Field(ge=1, le=720)
     ort_intra_op_num_threads: int = Field(ge=1, le=64)

@@ -66,14 +66,15 @@ def parse_document(job_id: str, arguments: dict) -> None:
         temporary_result = result_path.with_suffix(".tmp")
         temporary_result.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
         os.replace(temporary_result, result_path)
+        completed_units = result["meta"]["page_count"] or 1
         store.write(
             job_id,
             {
                 "job_id": job_id,
                 "status": "succeeded",
                 "progress": {
-                    "current_page": result["meta"]["page_count"],
-                    "total_pages": result["meta"]["page_count"],
+                    "current_page": completed_units,
+                    "total_pages": completed_units,
                 },
                 "result_path": str(result_path),
             },

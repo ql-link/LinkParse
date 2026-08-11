@@ -18,6 +18,7 @@ def health(settings: Annotated[Settings, Depends(get_effective_settings)]) -> di
         "pymupdf": importlib.util.find_spec("fitz") is not None,
         "rapidocr": importlib.util.find_spec("rapidocr") is not None,
         "opendataloader": importlib.util.find_spec("opendataloader_pdf") is not None,
+        "mammoth_word": importlib.util.find_spec("mammoth") is not None,
     }
     storage = OssAssetStorage(settings)
     database_status = {"configured": bool(settings.database_url), "available": False}

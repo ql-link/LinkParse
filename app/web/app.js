@@ -445,6 +445,11 @@ async function loadPublicInfo() {
 }
 
 function updateFileLabel(file) {
+  const isWord = Boolean(file?.name.toLowerCase().endsWith(".docx"));
+  $$('#parse-formats input[type="checkbox"]').forEach((input) => {
+    input.disabled = isWord && input.value !== "markdown";
+    if (isWord) input.checked = input.value === "markdown";
+  });
   if (!file) {
     $("#file-label").textContent = "选择或拖入文档";
     return;
@@ -508,7 +513,10 @@ async function submitParse(event) {
     showToast("请先登录，或填写 API Key", true);
     return;
   }
-  const formats = $$('#parse-formats input[type="checkbox"]:checked').map((item) => item.value);
+  const isWord = file.name.toLowerCase().endsWith(".docx");
+  const formats = isWord
+    ? ["markdown"]
+    : $$('#parse-formats input[type="checkbox"]:checked').map((item) => item.value);
   if (!formats.length) {
     showToast("至少选择一种输出格式", true);
     return;
@@ -550,11 +558,15 @@ function fillConfig(payload) {
   const available = concurrency?.available;
   const ocr = concurrency?.engines?.rapidocr;
   const odl = concurrency?.engines?.opendataloader;
+  const word = concurrency?.engines?.word;
   $("#ocr-concurrency-state").textContent = available && ocr
     ? `当前占用 ${ocr.active} / ${ocr.limit}`
     : "Redis 状态暂不可用";
   $("#odl-concurrency-state").textContent = available && odl
     ? `当前占用 ${odl.active} / ${odl.limit}`
+    : "Redis 状态暂不可用";
+  $("#word-concurrency-state").textContent = available && word
+    ? `当前占用 ${word.active} / ${word.limit}`
     : "Redis 状态暂不可用";
   const access = $("#config-access-status");
   access.textContent = payload.updated_at

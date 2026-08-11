@@ -3,7 +3,7 @@ from pathlib import Path
 from fastapi import UploadFile
 
 from app.core.errors import LinkParseError
-from app.services.file_validate import ALLOWED_TYPES, validate_file_header
+from app.services.file_validate import ALLOWED_TYPES, validate_file_header, validate_saved_file
 
 
 async def save_upload(
@@ -29,6 +29,7 @@ async def save_upload(
                         413,
                     )
                 target.write(chunk)
+        validate_saved_file(destination, media_type)
     except Exception:
         destination.unlink(missing_ok=True)
         raise

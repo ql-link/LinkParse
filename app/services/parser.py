@@ -8,14 +8,26 @@ from app.core.config import Settings
 from app.core.errors import EngineUnavailable, LinkParseError
 from app.engines.opendataloader_engine import OpenDataLoaderEngine
 from app.engines.rapidocr_engine import RapidOCREngine
+from app.engines.word_engine import WordEngine
 from app.services.assets import OssAssetStorage
 from app.services.concurrency import ConcurrencyLimiter
+from app.services.file_validate import DOCX_MEDIA_TYPE
 from app.services.format_convert import fill_missing_outputs, outputs_from_pages
 from app.services.pdf import render_pdf, validate_pdf
 from app.services.pdf_quality import analyze_pdf_quality
 from app.services.pdf_structure import analyze_pdf_markdown
 
 VALID_FORMATS = {"text", "json", "markdown", "html"}
+
+
+def engine_for_media_type(media_type: str) -> str:
+    if media_type.startswith("image/"):
+        return "rapidocr"
+    if media_type == "application/pdf":
+        return "opendataloader_ocr"
+    if media_type == DOCX_MEDIA_TYPE:
+        return "mammoth_word"
+    return "unsupported"
 
 
 def parse_formats(value: str) -> set[str]:
@@ -36,6 +48,7 @@ class DocumentParser:
         self.settings = settings
         self._ocr: RapidOCREngine | None = None
         self._structured: OpenDataLoaderEngine | None = None
+        self._word: WordEngine | None = None
         self.asset_storage = asset_storage or OssAssetStorage(settings)
         self.concurrency_limiter = concurrency_limiter or ConcurrencyLimiter(settings)
 
@@ -60,6 +73,12 @@ class DocumentParser:
             )
         return self._structured
 
+    @property
+    def word(self) -> WordEngine:
+        if self._word is None:
+            self._word = WordEngine()
+        return self._word
+
     def parse(
         self,
         path: Path,
@@ -74,6 +93,7 @@ class DocumentParser:
         started = time.monotonic()
         assets: list[dict] = []
         pdf_metadata: dict | None = None
+        word_metadata: dict | None = None
         if media_type.startswith("image/"):
             pages = [self._ocr_image(path, 1, include_bbox)]
             outputs = outputs_from_pages(pages, formats)
@@ -82,7 +102,7 @@ class DocumentParser:
                     request_id, [path], kind="source_image", pages={path.name: 1}
                 )
             selected, detected, page_count = "rapidocr", "image", 1
-        else:
+        elif media_type == "application/pdf":
             page_count = validate_pdf(path, self.settings.max_pdf_pages)
             outputs, assets = self._parse_pdf_pipeline(
                 path,
@@ -102,6 +122,18 @@ class DocumentParser:
                 detected = "scanned_pdf"
             else:
                 detected = "mixed_pdf"
+        elif media_type == DOCX_MEDIA_TYPE:
+            outputs, assets, word_metadata = self._parse_word_pipeline(
+                path,
+                include_images,
+                request_id,
+            )
+            if progress:
+                progress(word_metadata["page_count"], word_metadata["page_count"])
+            selected, detected = "mammoth_word", "docx"
+            page_count = word_metadata["page_count"]
+        else:
+            raise LinkParseError("UNSUPPORTED_FILE_TYPE", "Unsupported file type", 415)
         return {
             "request_id": request_id,
             "filename": filename,
@@ -113,8 +145,39 @@ class DocumentParser:
                 "page_count": page_count,
                 "duration_ms": round((time.monotonic() - started) * 1000),
                 "pdf": pdf_metadata,
+                "word": word_metadata,
             },
         }
+
+    def _parse_word_pipeline(
+        self,
+        path: Path,
+        include_images: bool,
+        request_id: str,
+    ) -> tuple[dict, list[dict], dict]:
+        output_dir = self.settings.data_dir / "tmp" / f"{path.stem}_word"
+        assets: list[dict] = []
+        try:
+            with self.concurrency_limiter.slot("word"):
+                if not self.word.available():
+                    raise EngineUnavailable("mammoth_word")
+                parsed = self.word.parse(path, output_dir, include_images)
+            outputs = {"markdown": parsed.markdown}
+            if include_images and parsed.image_paths:
+                assets, replacements = self.asset_storage.upload_files(
+                    request_id,
+                    parsed.image_paths,
+                    kind="embedded_image",
+                    relative_to=output_dir,
+                    pages=parsed.image_pages,
+                )
+                outputs = self.asset_storage.rewrite_outputs(outputs, replacements)
+            return outputs, assets, parsed.metadata
+        except Exception:
+            self.asset_storage.delete_assets(assets)
+            raise
+        finally:
+            shutil.rmtree(output_dir, ignore_errors=True)
 
     def _ocr_image(self, path: Path, page: int, include_bbox: bool) -> dict:
         with self.concurrency_limiter.slot("rapidocr"):
