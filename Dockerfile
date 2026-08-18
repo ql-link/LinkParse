@@ -20,11 +20,18 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 COPY --from=java-runtime /opt/java/openjdk /opt/java/openjdk
 COPY --from=python-dependencies /install /usr/local
+
+# LibreOffice converts legacy DOC files. RapidOCR pulls in the regular OpenCV
+# wheel, which dynamically loads libGL even though LinkParse runs headlessly.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libreoffice-writer \
+    && apt-get install -y --no-install-recommends \
+        libgl1 \
+        libglib2.0-0 \
+        libreoffice-writer \
     && rm -rf /var/lib/apt/lists/* \
     && java -version \
-    && soffice --version
+    && soffice --version \
+    && python -c "import cv2; from rapidocr import RapidOCR; assert RapidOCR"
 
 WORKDIR /app
 COPY app ./app
