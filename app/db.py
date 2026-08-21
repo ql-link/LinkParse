@@ -94,6 +94,7 @@ class ParseRecord(Base):
     __table_args__ = (
         Index("ix_parse_records_user_created", "user_id", "created_at"),
         Index("ix_parse_records_job_id", "job_id"),
+        Index("ix_parse_records_request_id", "request_id"),
     )
 
     id: Mapped[int] = mapped_column(IdType, primary_key=True, autoincrement=True)
@@ -103,7 +104,7 @@ class ParseRecord(Base):
     api_key_id: Mapped[int | None] = mapped_column(
         ForeignKey("api_keys.id", ondelete="SET NULL"), nullable=True
     )
-    request_id: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
+    request_id: Mapped[str] = mapped_column(String(128), nullable=False)
     job_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     filename: Mapped[str] = mapped_column(String(512), nullable=False)
     mode: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -144,19 +145,49 @@ class Database:
             self._initialized = True
 
     def _upgrade_legacy_schema(self) -> None:
-        """Apply the small additive migration needed by pre-role account databases."""
+        """Bring databases created by earlier releases up to the current schema."""
         assert self.engine is not None
         columns = {column["name"] for column in inspect(self.engine).get_columns("users")}
-        if "is_admin" in columns:
+        if "is_admin" not in columns:
+            with self.engine.begin() as connection:
+                connection.execute(
+                    text("ALTER TABLE users ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT 0")
+                )
+                # Preserve the established dev administrator without promoting future sign-ups.
+                connection.execute(
+                    text("UPDATE users SET is_admin = 1 WHERE LOWER(username) = 'root'")
+                )
+
+        self._allow_duplicate_parse_request_ids()
+
+    def _allow_duplicate_parse_request_ids(self) -> None:
+        """Keep request IDs as trace metadata rather than an idempotency boundary."""
+        assert self.engine is not None
+        if self.engine.dialect.name != "mysql":
             return
+
+        inspector = inspect(self.engine)
+        matching_constraints = [
+            constraint
+            for constraint in inspector.get_unique_constraints("parse_records")
+            if constraint.get("column_names") == ["request_id"] and constraint.get("name")
+        ]
+        indexes = {index.get("name") for index in inspector.get_indexes("parse_records")}
+        if not matching_constraints and "ix_parse_records_request_id" in indexes:
+            return
+
+        preparer = self.engine.dialect.identifier_preparer
+        table_name = preparer.quote("parse_records")
         with self.engine.begin() as connection:
-            connection.execute(
-                text("ALTER TABLE users ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT 0")
-            )
-            # Preserve the established dev administrator without promoting future sign-ups.
-            connection.execute(
-                text("UPDATE users SET is_admin = 1 WHERE LOWER(username) = 'root'")
-            )
+            for constraint in matching_constraints:
+                constraint_name = preparer.quote(str(constraint["name"]))
+                connection.execute(text(f"ALTER TABLE {table_name} DROP INDEX {constraint_name}"))
+            if "ix_parse_records_request_id" not in indexes:
+                index_name = preparer.quote("ix_parse_records_request_id")
+                column_name = preparer.quote("request_id")
+                connection.execute(
+                    text(f"CREATE INDEX {index_name} ON {table_name} ({column_name})")
+                )
 
     def ping(self) -> bool:
         if not self.configured:

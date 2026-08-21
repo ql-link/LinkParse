@@ -77,7 +77,7 @@
           <div class="section-heading"><p class="section-kicker">CONVENTIONS</p><h2>通用请求约定</h2><p>所有接口使用当前站点作为 Base URL。解析接口上传文件，管理接口提交 JSON，响应最外层始终为 JSON。</p></div>
           <div class="convention-grid">
             <article><span>认证</span><strong>Authorization</strong><code>Bearer &lt;TOKEN&gt;</code><p>注册、登录和公开接口无需 Token；账户接口必须使用登录会话，解析接口可使用会话或用户 API Key。</p></article>
-            <article><span>请求追踪</span><strong>X-Request-ID</strong><code>demo-request-001</code><p>可选，允许字母、数字及 <code>._:-</code>，最长 128 字符；响应头会原样返回。</p></article>
+            <article><span>请求追踪</span><strong>X-Request-ID</strong><code>demo-request-001</code><p>可选，允许字母、数字及 <code>._:-</code>，最长 128 字符；响应头会原样返回。该值仅用于追踪，不作为幂等键；重复 ID 的请求仍会分别解析。</p></article>
             <article><span>文件上传</span><strong>Content-Type</strong><code>multipart/form-data</code><p>由 HTTP 客户端自动生成 boundary，不要手工固定该请求头。</p></article>
             <article><span>JSON 配置</span><strong>Content-Type</strong><code>application/json</code><p>仅 <code>PUT /v1/admin/config</code> 使用。</p></article>
           </div>
@@ -465,7 +465,7 @@
             <div><code>422</code><strong>PDF_RENDER_FAILED</strong><p>PDF 损坏、加密或无法渲染。</p><span>检查或重新生成 PDF。</span></div>
             <div><code>422</code><strong>OCR_FAILED</strong><p>某一页 OCR 执行失败。</p><span>检查文件并保留 request_id。</span></div>
             <div><code>503</code><strong>ENGINE_UNAVAILABLE</strong><p>解析引擎或异步队列不可用。</p><span>检查 /health，稍后有限重试。</span></div>
-            <div><code>503</code><strong>DATABASE_UNAVAILABLE</strong><p>账户或解析记录无法可靠写入数据库。</p><span>使用新的 X-Request-ID 有限重试，并检查数据库健康状态。</span></div>
+            <div><code>503</code><strong>DATABASE_UNAVAILABLE</strong><p>账户或解析记录无法可靠写入数据库。</p><span>可保留原 X-Request-ID 有限重试，并检查数据库健康状态。</span></div>
             <div><code>500</code><strong>INTERNAL_ERROR</strong><p>未预期的服务端异常。</p><span>记录 request_id 并联系维护方。</span></div>
           </div>
         </section>

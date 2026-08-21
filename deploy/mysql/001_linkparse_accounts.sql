@@ -64,7 +64,7 @@ CREATE TABLE IF NOT EXISTS parse_records (
   created_at DATETIME NOT NULL,
   completed_at DATETIME NULL,
   PRIMARY KEY (id),
-  UNIQUE KEY uq_parse_records_request_id (request_id),
+  KEY ix_parse_records_request_id (request_id),
   KEY ix_parse_records_user_created (user_id, created_at),
   KEY ix_parse_records_job_id (job_id),
   CONSTRAINT fk_parse_records_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL,

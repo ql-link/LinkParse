@@ -33,7 +33,8 @@ async def parse_document(
     include_images: Annotated[bool, Form()] = False,
 ) -> dict:
     request_id = getattr(request.state, "request_id", f"req_{uuid.uuid4().hex}")
-    temporary = settings.data_dir / "uploads" / request_id
+    execution_id = uuid.uuid4().hex
+    temporary = settings.data_dir / "uploads" / execution_id
     temporary, media_type, filename, size = await save_upload(
         file, temporary, settings.max_upload_mb * 1024 * 1024
     )
