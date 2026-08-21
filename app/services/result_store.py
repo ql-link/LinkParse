@@ -2,6 +2,7 @@ import json
 import os
 import re
 import time
+import uuid
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
@@ -32,9 +33,7 @@ class ResultStore:
             payload = {}
         assets = payload.get("assets", []) if isinstance(payload, dict) else []
         expected_assets = sum(
-            1
-            for asset in assets
-            if isinstance(asset, dict) and isinstance(asset.get("id"), str)
+            1 for asset in assets if isinstance(asset, dict) and isinstance(asset.get("id"), str)
         )
         deleted_assets = OssAssetStorage(self.settings).delete_assets(assets)
         if deleted_assets < expected_assets:
@@ -45,7 +44,7 @@ class ResultStore:
     def write_asset_manifest(self, result: dict[str, Any]) -> Path:
         request_id = str(result.get("request_id", "unknown"))
         digest = sha256(request_id.encode()).hexdigest()[:24]
-        path = self.settings.data_dir / "results" / f"asset_{digest}.json"
+        path = self.settings.data_dir / "results" / f"asset_{digest}_{uuid.uuid4().hex}.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "request_id": request_id,

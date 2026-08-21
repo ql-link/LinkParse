@@ -42,7 +42,7 @@ def create_parse_record(
         logger.exception("parse_record_create_failed request_id=%s", request_id)
         raise LinkParseError(
             "DATABASE_UNAVAILABLE",
-            "Unable to create parse record; retry with a new request ID",
+            "Unable to create parse record",
             503,
         ) from exc
 

@@ -19,6 +19,7 @@ LibreOffice 转为 DOCX，再使用 Mammoth 转语义 HTML，并收敛为 Markdo
 - PDF/图片按需输出 `text`、`json`、`markdown`、`html`；Word 固定输出 `markdown`
 - 可选导出 PDF/Word 内嵌图片、OCR 页面图或原始图片到阿里云 OSS，并在 `assets` 返回 URL
 - 独立用户 API Key、解析记录归属、魔数文件检测、大小/页数/DPI 限制和统一错误码
+- `X-Request-ID` 仅用于调用链追踪，不作为幂等键；重复 ID 的每次请求都会独立解析并分别记录
 - Redis 分布式并发控制，分别限制 RapidOCR、OpenDataLoader 与 Word 的执行数量
 - PDF 只有一条 `opendataloader_ocr` 管线，不暴露互斥引擎和强制 OCR 开关
 - DOC 和 DOCX 统一进入 `mammoth_word` 管线；DOC 会先在隔离目录中转换并验证为 DOCX

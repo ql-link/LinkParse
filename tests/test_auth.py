@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 
 from app.api import auth as auth_api
 from app.core.config import Settings, get_settings
-from app.db import Database, User, UserSession, database_for_url, utcnow
+from app.db import Database, ParseRecord, User, UserSession, database_for_url, utcnow
 from app.main import app
 from app.services.parser import DocumentParser
 
@@ -229,9 +229,7 @@ def test_expired_sessions_are_removed_by_database_cleanup(tmp_path):
         app.dependency_overrides.clear()
 
 
-def test_duplicate_request_id_is_rejected_instead_of_losing_the_record(
-    tmp_path, monkeypatch
-):
+def test_duplicate_request_id_creates_independent_parse_records(tmp_path, monkeypatch):
     settings = configured_settings(tmp_path)
     created = register(settings, "request_id")
     headers = {
@@ -263,8 +261,19 @@ def test_duplicate_request_id_is_rejected_instead_of_losing_the_record(
             files={"file": ("sample.png", b"\x89PNG\r\n\x1a\n", "image/png")},
         )
         assert first.status_code == 200
-        assert second.status_code == 503
-        assert second.json()["error"]["code"] == "DATABASE_UNAVAILABLE"
+        assert second.status_code == 200
+        assert first.json()["request_id"] == "client-reused-id"
+        assert second.json()["request_id"] == "client-reused-id"
+
+        database = database_for_url(settings.database_url)
+        with database.session() as session:
+            records = session.query(ParseRecord).order_by(ParseRecord.id).all()
+            assert len(records) == 2
+            assert [record.request_id for record in records] == [
+                "client-reused-id",
+                "client-reused-id",
+            ]
+            assert all(record.status == "succeeded" for record in records)
         assert list((settings.data_dir / "uploads").iterdir()) == []
     finally:
         app.dependency_overrides.clear()

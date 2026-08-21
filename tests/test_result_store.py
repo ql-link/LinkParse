@@ -37,6 +37,20 @@ def test_expired_result_is_removed(tmp_path):
     assert not result_path.exists()
 
 
+def test_asset_manifests_are_independent_for_duplicate_request_ids(tmp_path):
+    settings = Settings(data_dir=tmp_path, api_keys=["test"])
+    settings.ensure_directories()
+    store = ResultStore(settings)
+    result = {"request_id": "reused-request", "assets": []}
+
+    first = store.write_asset_manifest(result)
+    second = store.write_asset_manifest(result)
+
+    assert first != second
+    assert first.exists()
+    assert second.exists()
+
+
 def test_runtime_config_is_atomic_and_resolves_over_environment(tmp_path):
     settings = Settings(data_dir=tmp_path, api_keys=["test"], max_upload_mb=50)
     store = RuntimeConfigStore(settings)
