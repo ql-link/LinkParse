@@ -119,12 +119,14 @@ def test_document_parser_uploads_word_images_and_rewrites_all_outputs(tmp_path):
         include_bbox=True,
         include_images=True,
         request_id="word-test",
+        include_layout=True,
     )
 
     assert result["engine"] == "mammoth_word"
     assert result["detected_type"] == "docx"
     assert result["meta"]["page_count"] == 1
     assert result["meta"]["word"]["bbox_supported"] is False
+    assert result["meta"]["pdf"] is None
     assert set(result["outputs"]) == {"markdown"}
     assert limiter.calls == ["word"]
     assert len(storage.uploaded) == 1
@@ -167,10 +169,12 @@ def test_document_parser_converts_doc_then_uses_existing_word_pipeline(tmp_path)
         include_bbox=True,
         include_images=False,
         request_id="legacy-word-test",
+        include_layout=True,
     )
 
     assert result["engine"] == "mammoth_word"
     assert result["detected_type"] == "doc"
+    assert result["meta"]["pdf"] is None
     assert set(result["outputs"]) == {"markdown"}
     assert "# 产品说明" in result["outputs"]["markdown"]
     assert result["meta"]["word"]["source_format"] == "doc"

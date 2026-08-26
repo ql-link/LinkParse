@@ -31,7 +31,7 @@
           <div class="hero-status"><span>REST API</span><span>HTTP + JSON</span><span>v0.2.0</span></div>
           <h1>LinkParse API</h1>
           <p class="hero-subtitle">完整接口参考</p>
-          <p class="lede">上传 PDF、DOC、DOCX 或图片。PDF 执行 OpenDataLoader + 按页 OCR；DOC 先转为 DOCX，再执行 Mammoth + 语义 HTML 管线，Word 最终只返回 Markdown。</p>
+          <p class="lede">上传 PDF、DOC、DOCX 或图片。PDF 执行 OpenDataLoader + 按页 OCR；DOC 先转为 DOCX，再执行 Mammoth + 语义 HTML 管线，Word 最终只返回 Markdown。同步 PDF 解析只有显式开启 <code>include_layout</code> 才返回可验证的版面行块，默认请求继续沿用原有解析与输出路径。</p>
           <div class="api-summary-grid">
             <div><span>输入格式</span><strong>PDF / DOC / DOCX / PNG / JPEG / WebP / TIFF</strong></div>
             <div><span>认证方式</span><strong>Bearer Session / API Key</strong></div>
@@ -48,6 +48,7 @@
   -H "X-Request-ID: demo-request-001" \
   -F "file=@document.pdf" \
   -F "output_formats=markdown,json" \
+  -F "include_layout=true" \
   -F "include_images=true"</code></pre></div>
             <div class="code-window"><div class="code-toolbar"><span><b></b>响应 · HTTP 200</span><button class="copy-code fluid-press" data-copy="quick-response">复制</button></div><pre id="quick-response"><code>{
   "request_id": "demo-request-001",
@@ -68,7 +69,48 @@
     "expires_at": null,
     "page": 1
   }],
-  "meta": { "page_count": 3, "duration_ms": 842 }
+  "meta": {
+    "page_count": 3,
+    "duration_ms": 842,
+    "pdf": { "layout": {
+      "schema_version": 1,
+      "blocks": [{
+        "block_id": "page-1-line-1",
+        "source_order": 0,
+        "source_page": 1,
+        "role": "heading",
+        "heading_level": 1,
+        "text": "项目方案",
+        "bbox": [0.058, 0.051, 0.203, 0.066],
+        "row_id": null,
+        "continuation_of": null,
+        "join_with": "",
+        "confidence": null,
+        "role_source": "opendataloader"
+      }, {
+        "block_id": "page-1-line-2",
+        "source_order": 1,
+        "source_page": 1,
+        "role": "paragraph",
+        "heading_level": null,
+        "text": "正文内容……",
+        "bbox": [0.058, 0.078, 0.42, 0.094],
+        "row_id": null,
+        "continuation_of": null,
+        "join_with": "",
+        "confidence": null,
+        "role_source": "opendataloader"
+      }],
+      "quality": {
+        "status": "passed",
+        "source_line_count": 2,
+        "output_block_count": 2,
+        "heading_count": 1,
+        "row_group_count": 0,
+        "warnings": []
+      }
+    } }
+  }
 }</code></pre></div>
           </div>
         </section>
@@ -118,7 +160,7 @@
             <div class="route-row"><span>scanned_pdf</span><strong>OpenDataLoader + 全页 OCR</strong><p>保留页码来源，再渲染所有有内容的扫描页进行 OCR。</p></div>
             <div class="route-row featured"><span>mixed_pdf</span><strong>OpenDataLoader + 部分页 OCR</strong><p>保留整体结构，只补齐门禁识别出的扫描页或丢失文本页。</p></div>
           </div>
-          <div class="auto-notes"><article><small>主结果</small><p>OpenDataLoader 原文始终保留。</p></article><article><small>选择依据</small><p>页码、图片覆盖率、文本保留率与有效字符数。</p></article><article><small>OCR 补齐</small><p>RapidOCR 输出追加到对应页面。</p></article><article><small>最终门禁</small><p>补齐后仍不完整或低置信度则明确失败。</p></article></div>
+          <div class="auto-notes"><article><small>默认结果</small><p><code>include_layout=false</code> 时保留 OpenDataLoader 原文和兼容 OCR 追加。</p></article><article><small>选择依据</small><p>页码、图片覆盖率、文本保留率与有效字符数。</p></article><article><small>版面模式</small><p><code>include_layout=true</code> 时从行块确定性生成 Markdown，避免旧结果重复拼接。</p></article><article><small>最终门禁</small><p>补齐后仍不完整或低置信度则明确失败。</p></article></div>
         </section>
 
         <section class="doc-section endpoint-section" id="health">
@@ -221,6 +263,7 @@
             <div><code>output_formats</code><span>CSV string · <b>text,json</b></span><p>PDF/图片可选择 <code>text,json,markdown,html</code>；Word 固定为 <code>markdown</code>。</p></div>
             <div><code>include_bbox</code><span>boolean · <b>true</b></span><p>是否在 OCR JSON 中返回 <code>bbox</code>；Word 不支持 bbox。</p></div>
             <div><code>include_images</code><span>boolean · <b>false</b></span><p>设为 <code>true</code> 后把内嵌图片、OCR 页面图或原始图片上传到阿里云 OSS，并返回 <code>assets</code>。</p></div>
+            <div><code>include_layout</code><span>boolean · <b>false</b></span><p>仅同步 PDF 解析生效，必须显式设为 <code>true</code> 才在 <code>meta.pdf.layout</code> 返回版面 blocks，并让 <code>outputs.markdown</code> 只由 blocks 确定性生成。未传或设为 <code>false</code> 时完全沿用原有 PDF 解析、outputs、Markdown/Text 和响应形态，不返回 layout。即使关闭 <code>include_bbox</code>，layout 模式也会在内部保留 OCR bbox。</p></div>
           </div>
           <div class="example-pair spaced">
             <div class="code-window"><div class="code-toolbar"><span><b></b>请求 · cURL</span><button class="copy-code fluid-press" data-copy="parse-request">复制</button></div><pre id="parse-request"><code>curl -X POST <span class="origin-token"></span>/v1/parse \
@@ -229,6 +272,7 @@
   -F "file=@scan.pdf" \
   -F "output_formats=text,json,markdown" \
   -F "include_bbox=true" \
+  -F "include_layout=true" \
   -F "include_images=true"</code></pre></div>
             <div class="code-window"><div class="code-toolbar"><span><b></b>响应 · 200</span><button class="copy-code fluid-press" data-copy="parse-response">复制</button></div><pre id="parse-response"><code>{
   "request_id": "parse-scan-001",
@@ -237,7 +281,7 @@
   "detected_type": "scanned_pdf",
   "outputs": {
     "text": "项目方案",
-    "markdown": "## Page 1\n\n项目方案",
+    "markdown": "# 项目方案",
     "json": {
       "pages": [{
         "page": 1,
@@ -263,7 +307,37 @@
     "expires_at": null,
     "page": 1
   }],
-  "meta": { "page_count": 1, "duration_ms": 1260 }
+  "meta": {
+    "page_count": 1,
+    "duration_ms": 1260,
+    "pdf": {
+      "layout": {
+        "schema_version": 1,
+        "blocks": [{
+          "block_id": "page-1-line-1",
+          "source_order": 0,
+          "source_page": 1,
+          "role": "heading",
+          "heading_level": 1,
+          "text": "项目方案",
+          "bbox": [0.058, 0.051, 0.203, 0.066],
+          "row_id": null,
+          "continuation_of": null,
+          "join_with": "",
+          "confidence": 0.987654,
+          "role_source": "visual_inference"
+        }],
+        "quality": {
+          "status": "passed",
+          "source_line_count": 1,
+          "output_block_count": 1,
+          "heading_count": 1,
+          "row_group_count": 0,
+          "warnings": []
+        }
+      }
+    }
+  }
 }</code></pre></div>
           </div>
           <div class="schema-table">
@@ -280,14 +354,17 @@
             <div><code>meta.pdf.initial_quality</code><span>object</span><p>OpenDataLoader 主解析后的逐页质量报告和待 OCR 页。</p></div>
             <div><code>meta.pdf.final_quality</code><span>object</span><p>页级 OCR 合并后的最终门禁结果；成功响应固定为 <code>PASSED</code>。</p></div>
             <div><code>meta.pdf.ocr_pages</code><span>integer[]</span><p>本次实际执行 RapidOCR 的 PDF 页码。</p></div>
+            <div><code>meta.pdf.layout</code><span>object | absent</span><p>仅 PDF 且显式设置 <code>include_layout=true</code> 时返回。未传或设为 <code>false</code> 时该字段不存在，原有解析与响应不变。开启后包含 <code>schema_version=1</code>、按源顺序的 <code>blocks</code> 和 <code>quality</code>；此模式下 <code>outputs.markdown</code> 仅由 blocks 生成。</p></div>
+            <div><code>meta.pdf.layout.blocks[]</code><span>object</span><p>每个非空源行一个 block，包含 <code>block_id</code>、页码/顺序、角色、归一化 <code>bbox</code>、同行与续行引用、连接符和角色来源。</p></div>
+            <div><code>meta.pdf.layout.quality</code><span>object</span><p>包含 <code>passed|degraded</code>、源行数、输出块数、标题数、同行组数和稳定告警码。</p></div>
             <div><code>meta.word</code><span>object | null</span><p>Word 的源格式、转换信息、章节、公式、GFM/行级语义表格数量、图片、显式分页和解析告警。</p></div>
           </div>
         </section>
 
         <section class="doc-section endpoint-section" id="create-job">
           <div class="endpoint-head"><div><span class="method post">POST</span><code>/v1/jobs</code></div><span class="auth-badge">Bearer Session / API Key · HTTP 202</span></div>
-          <div class="section-heading"><h2>创建异步解析任务</h2><p>请求字段与同步解析完全相同。文件入队后立即返回 <code>job_id</code>，Worker 在后台处理。</p></div>
-          <div class="response-note"><strong>请求参数</strong><p><code>file</code>、<code>output_formats</code>、<code>include_bbox</code>、<code>include_images</code> 的定义与 <a href="#parse">同步解析</a>一致。</p></div>
+          <div class="section-heading"><h2>创建异步解析任务</h2><p>文件入队后立即返回 <code>job_id</code>，Worker 在后台处理。版面布局只支持同步解析。</p></div>
+          <div class="response-note"><strong>请求参数</strong><p><code>file</code>、<code>output_formats</code>、<code>include_bbox</code>、<code>include_images</code> 与同步解析一致。<code>include_layout</code> 省略或为 <code>false</code> 时沿用旧异步协议；设为 <code>true</code> 时在应用侧产生任何持久化或入队操作前返回 <code>422 LAYOUT_ASYNC_UNSUPPORTED</code>。</p></div>
           <div class="example-pair spaced">
             <div class="code-window"><div class="code-toolbar"><span><b></b>请求 · cURL</span><button class="copy-code fluid-press" data-copy="job-create-request">复制</button></div><pre id="job-create-request"><code>curl -X POST <span class="origin-token"></span>/v1/jobs \
   -H "Authorization: Bearer &lt;API_KEY&gt;" \
@@ -458,6 +535,8 @@
             <div><code>410</code><strong>JOB_RESULT_EXPIRED</strong><p>结果文件已经过期。</p><span>重新提交原文件。</span></div>
             <div><code>413</code><strong>FILE_TOO_LARGE</strong><p>上传文件超过大小限制。</p><span>压缩、拆分或调整配置。</span></div>
             <div><code>413</code><strong>PDF_TOO_MANY_PAGES</strong><p>PDF 页数超过限制。</p><span>拆分 PDF 或调整配置。</span></div>
+            <div><code>413</code><strong>LAYOUT_RESOURCE_LIMIT</strong><p><code>include_layout=true</code> 时版面输入超过处理预算。</p><span>缩短或拆分 PDF，或关闭 layout 后继续使用兼容解析结果。</span></div>
+            <div><code>422</code><strong>LAYOUT_ASYNC_UNSUPPORTED</strong><p>异步任务请求了只在同步接口提供的版面布局。</p><span>改用 <code>/v1/parse</code>，或关闭 <code>include_layout</code>。</span></div>
             <div><code>415</code><strong>UNSUPPORTED_FILE_TYPE</strong><p>文件头不是支持的 PDF、DOC、DOCX 或图片格式。</p><span>转换文件格式后重试。</span></div>
             <div><code>422</code><strong>INVALID_WORD_DOCUMENT</strong><p>Word 文档损坏、加密、格式不符、转换失败或超过资源限制。</p><span>检查文档后重试。</span></div>
             <div><code>504</code><strong>DOC_CONVERSION_TIMEOUT</strong><p>旧版 DOC 转换超过服务端时限。</p><span>拆分文档或检查文档完整性后重试。</span></div>

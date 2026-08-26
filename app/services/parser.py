@@ -1,3 +1,4 @@
+import json
 import re
 import shutil
 import time
@@ -16,9 +17,20 @@ from app.services.format_convert import fill_missing_outputs, outputs_from_pages
 from app.services.legacy_doc import LegacyDocConversion, LegacyDocConverter
 from app.services.pdf import render_pdf, validate_pdf
 from app.services.pdf_quality import analyze_pdf_quality
-from app.services.pdf_structure import analyze_pdf_markdown
+from app.services.pdf_structure import (
+    analyze_pdf_markdown,
+    build_pdf_layout,
+    markdown_from_layout,
+)
 
 VALID_FORMATS = {"text", "json", "markdown", "html"}
+MAX_LAYOUT_RESPONSE_BYTES = 2 * 1024 * 1024
+LAYOUT_RESOURCE_LIMIT_WARNINGS = frozenset(
+    {
+        "layout_input_limit_exceeded",
+        "layout_source_limit_exceeded",
+    }
+)
 
 
 def engine_for_media_type(media_type: str) -> str:
@@ -101,6 +113,7 @@ class DocumentParser:
         include_images: bool,
         request_id: str,
         progress: Callable[[int, int], None] | None = None,
+        include_layout: bool = False,
     ) -> dict:
         started = time.monotonic()
         assets: list[dict] = []
@@ -124,6 +137,7 @@ class DocumentParser:
                 include_images,
                 request_id,
                 page_count=page_count,
+                include_layout=include_layout,
             )
             selected = "opendataloader_ocr"
             pdf_metadata = outputs.pop("_pdf_metadata")
@@ -148,7 +162,7 @@ class DocumentParser:
             page_count = word_metadata["page_count"]
         else:
             raise LinkParseError("UNSUPPORTED_FILE_TYPE", "Unsupported file type", 415)
-        return {
+        response = {
             "request_id": request_id,
             "filename": filename,
             "engine": selected,
@@ -162,6 +176,18 @@ class DocumentParser:
                 "word": word_metadata,
             },
         }
+        if pdf_metadata is not None and pdf_metadata.get("layout") is not None:
+            response_size = len(
+                json.dumps(response, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            )
+            if response_size > MAX_LAYOUT_RESPONSE_BYTES:
+                self.asset_storage.delete_assets(assets)
+                raise LinkParseError(
+                    "LAYOUT_RESOURCE_LIMIT",
+                    "PDF layout response exceeded the resource limit",
+                    413,
+                )
+        return response
 
     def _parse_word_pipeline(
         self,
@@ -194,9 +220,7 @@ class DocumentParser:
                     pages=parsed.image_pages,
                 )
                 outputs = self.asset_storage.rewrite_outputs(outputs, replacements)
-                parsed_metadata = self.asset_storage.rewrite_outputs(
-                    parsed.metadata, replacements
-                )
+                parsed_metadata = self.asset_storage.rewrite_outputs(parsed.metadata, replacements)
             else:
                 parsed_metadata = parsed.metadata
             metadata = {
@@ -265,6 +289,7 @@ class DocumentParser:
         include_images: bool = False,
         request_id: str = "unknown",
         page_count: int | None = None,
+        include_layout: bool = False,
     ) -> tuple[dict, list[dict]]:
         output_dir = self.settings.data_dir / "tmp" / f"{path.stem}_odl"
         assets: list[dict] = []
@@ -273,7 +298,11 @@ class DocumentParser:
         try:
             with self.concurrency_limiter.slot("opendataloader"):
                 outputs, image_paths = self.structured.parse(
-                    path, output_dir, pipeline_formats, include_images
+                    path,
+                    output_dir,
+                    pipeline_formats,
+                    include_images,
+                    keep_line_breaks=include_layout,
                 )
             outputs = fill_missing_outputs(outputs, pipeline_formats)
             markdown = outputs.get("markdown")
@@ -308,7 +337,7 @@ class DocumentParser:
                     path,
                     pipeline_formats,
                     self.settings.pdf_fallback_render_dpi,
-                    include_bbox,
+                    include_bbox or include_layout,
                     progress,
                     include_images,
                     request_id,
@@ -327,7 +356,41 @@ class DocumentParser:
                     f"PDF quality gate failed: {final_quality['status']}",
                     422,
                 )
-            structure = analyze_pdf_markdown(markdown, page_count or 0)
+            source_markdown = markdown
+            structure = analyze_pdf_markdown(source_markdown, page_count or 0)
+            layout = None
+            if include_layout:
+                layout = build_pdf_layout(
+                    path,
+                    markdown=source_markdown,
+                    page_count=page_count or 0,
+                    odl_json=outputs.get("json"),
+                    ocr_pages=ocr_pages,
+                )
+                layout_warnings = layout.get("quality", {}).get("warnings", [])
+                if any(
+                    isinstance(warning, str)
+                    and (
+                        warning in LAYOUT_RESOURCE_LIMIT_WARNINGS
+                        or (warning.startswith("layout_") and warning.endswith("_limit_exceeded"))
+                    )
+                    for warning in layout_warnings
+                ):
+                    raise LinkParseError(
+                        "LAYOUT_RESOURCE_LIMIT",
+                        "PDF layout exceeded the resource limit",
+                        413,
+                    )
+                # Once layout is requested, any requested Markdown/text output
+                # is generated exclusively from the layout blocks. Never
+                # append or retain the old ODL Markdown, which would duplicate
+                # OCR fallback content. The final format filter below still
+                # honours output_formats, so JSON-only callers do not receive
+                # an unsolicited Markdown field.
+                markdown = markdown_from_layout(layout["blocks"])
+                outputs["markdown"] = markdown
+                if not include_bbox:
+                    self._strip_ocr_bboxes(outputs.get("json"))
             if "text" in requested_formats:
                 outputs["text"] = self._markdown_to_text(markdown)
             for name in tuple(outputs):
@@ -343,6 +406,8 @@ class DocumentParser:
                 "page_provenance_complete": structure["page_provenance_complete"],
                 "warnings": structure["warnings"],
             }
+            if layout is not None:
+                outputs["_pdf_metadata"]["layout"] = layout
             return outputs, assets
         except Exception:
             self.asset_storage.delete_assets(assets)
@@ -375,6 +440,30 @@ class DocumentParser:
                     "ocr_fallback_pages": fallback_pages,
                 }
         return structured
+
+    @staticmethod
+    def _strip_ocr_bboxes(value: object) -> None:
+        """Remove internal OCR coordinates from the public JSON output.
+
+        ``include_layout`` needs OCR coordinates even when callers set
+        ``include_bbox=false``.  The coordinates remain available in
+        ``meta.pdf.layout`` but the legacy OCR page JSON keeps its old shape.
+        """
+
+        if not isinstance(value, dict):
+            return
+        pages = value.get("ocr_fallback_pages")
+        if not isinstance(pages, list):
+            return
+        for page in pages:
+            if not isinstance(page, dict):
+                continue
+            blocks = page.get("blocks")
+            if not isinstance(blocks, list):
+                continue
+            for block in blocks:
+                if isinstance(block, dict):
+                    block.pop("bbox", None)
 
     @staticmethod
     def _append_marked_pages(content: str, pages: dict[int, str], output_format: str) -> str:

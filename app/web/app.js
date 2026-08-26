@@ -784,6 +784,7 @@ async function submitParse(event) {
   body.append("file", file);
   body.append("output_formats", formats.join(","));
   body.append("include_bbox", String($("#parse-bbox").checked));
+  body.append("include_layout", String($("#parse-layout").checked));
   body.append("include_images", String($("#parse-images").checked));
   const button = $("#parse-submit");
   button.disabled = true;

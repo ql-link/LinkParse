@@ -55,6 +55,7 @@ class OpenDataLoaderEngine:
         output_dir: Path,
         formats: set[str],
         include_images: bool = False,
+        keep_line_breaks: bool = False,
     ) -> tuple[dict[str, Any], list[Path]]:
         self.last_metadata = {}
         self.image_pages = {}
@@ -81,6 +82,8 @@ class OpenDataLoaderEngine:
             command.append("--markdown-with-html")
         if include_images:
             command.append("--include-images")
+        if keep_line_breaks:
+            command.append("--keep-line-breaks")
         started = time.monotonic()
         try:
             with tempfile.TemporaryFile(mode="w+b") as stderr_file:

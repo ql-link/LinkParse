@@ -31,6 +31,7 @@ async def parse_document(
     output_formats: Annotated[str, Form()] = "text,json",
     include_bbox: Annotated[bool, Form()] = True,
     include_images: Annotated[bool, Form()] = False,
+    include_layout: Annotated[bool, Form()] = False,
 ) -> dict:
     request_id = getattr(request.state, "request_id", f"req_{uuid.uuid4().hex}")
     execution_id = uuid.uuid4().hex
@@ -58,6 +59,7 @@ async def parse_document(
             include_bbox,
             include_images,
             request_id,
+            include_layout=include_layout,
         )
         if result["assets"]:
             try:
