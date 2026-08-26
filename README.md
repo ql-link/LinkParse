@@ -17,6 +17,7 @@ LibreOffice 转为 DOCX，再使用 Mammoth 转语义 HTML，并收敛为 Markdo
 - `GET/POST/DELETE /v1/account/keys`：申请、查看与撤销用户 API Key
 - `GET /v1/account/records`：查看当前用户的解析记录
 - PDF/图片按需输出 `text`、`json`、`markdown`、`html`；Word 固定输出 `markdown`
+- 同步 PDF 解析只有显式传入 `include_layout=true` 才返回 `meta.pdf.layout`；未传或设为 `false` 时完全沿用原有解析路径、输出内容和响应形态
 - 可选导出 PDF/Word 内嵌图片、OCR 页面图或原始图片到阿里云 OSS，并在 `assets` 返回 URL
 - 独立用户 API Key、解析记录归属、魔数文件检测、大小/页数/DPI 限制和统一错误码
 - `X-Request-ID` 仅用于调用链追踪，不作为幂等键；重复 ID 的每次请求都会独立解析并分别记录
@@ -119,6 +120,7 @@ curl -X POST http://localhost:8080/v1/parse \
   -H 'Authorization: Bearer change-me' \
   -F 'file=@resume.pdf' \
   -F 'output_formats=text,json,markdown,html' \
+  -F 'include_layout=true' \
   -F 'include_images=true'
 ```
 
@@ -129,6 +131,10 @@ curl -X POST http://localhost:8080/v1/jobs \
   -H 'Authorization: Bearer change-me' \
   -F 'file=@scan.pdf'
 ```
+
+版面布局当前只支持同步 `/v1/parse`。异步 `/v1/jobs` 显式传入
+`include_layout=true` 会在文件保存、记录创建和任务入队前返回
+`422 LAYOUT_ASYNC_UNSUPPORTED`；省略或设为 `false` 时继续使用原有异步任务协议。
 
 ## PDF 解析管线
 
@@ -141,9 +147,17 @@ curl -X POST http://localhost:8080/v1/jobs \
 
 OpenDataLoader 的 Markdown 每页包含 `<!-- ODL_PAGE:n -->` 标记。响应的 `meta.pdf` 会给出
 初始/最终质量报告、实际 OCR 页、解析器耗时/输出资源统计，以及 `structure.tables` 中的
-Markdown/HTML 表格矩阵和来源页。OCR 文本以 `PAGE_FALLBACK:OCR` 标记追加在对应的
-OpenDataLoader 页面内；OpenDataLoader 原文不会被覆盖。页码来源不完整、OCR 置信度不足或补齐后
+Markdown/HTML 表格矩阵和来源页。默认 `include_layout=false` 时保持兼容行为：OCR 文本以
+`PAGE_FALLBACK:OCR` 标记追加在对应的 OpenDataLoader 页面内，原文不会被覆盖。
+
+同步 PDF 请求设置 `include_layout=true` 时，响应会新增 `meta.pdf.layout`：它包含按源顺序排列的
+行块、归一化 `bbox`、标题/列表角色、同行关系、续行引用和 `passed/degraded` 质量报告。此模式下
+`outputs.markdown` 只由 layout blocks 确定性生成，不再把旧的 OpenDataLoader/OCR Markdown
+再次拼接，避免跨章节粘连和重复。即使 `include_bbox=false`，服务也会在内部保留 OCR bbox
+以生成 layout；通用 OCR JSON 仍遵循原有输出约定。页码来源不完整、OCR 置信度不足或补齐后
 仍未通过质量门禁时，解析会明确失败，不返回表面成功但内容不完整的结果。
+版面响应还会在返回前执行序列化大小门禁；超过预算时返回
+`413 LAYOUT_RESOURCE_LIMIT`，避免下游在读取完整响应前以不稳定的网关错误失败。
 
 ## Word 解析管线
 

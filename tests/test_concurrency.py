@@ -59,7 +59,18 @@ class FakeStructured:
     image_pages = {}
     last_metadata = {}
 
-    def parse(self, _path, _output_dir, _formats, _include_images):
+    def __init__(self):
+        self.keep_line_breaks: list[bool] = []
+
+    def parse(
+        self,
+        _path,
+        _output_dir,
+        _formats,
+        _include_images,
+        keep_line_breaks=False,
+    ):
+        self.keep_line_breaks.append(keep_line_breaks)
         return {
             "text": "structured",
             "markdown": "<!-- ODL_PAGE:1 -->\n\nstructured",
@@ -109,7 +120,8 @@ def test_parser_uses_separate_slots_for_ocr_and_opendataloader(tmp_path):
         concurrency_limiter=limiter,
     )
     parser._ocr = FakeOcr()
-    parser._structured = FakeStructured()
+    structured = FakeStructured()
+    parser._structured = structured
     image_path = tmp_path / "image.png"
     image_path.write_bytes(b"image")
 
@@ -128,4 +140,5 @@ def test_parser_uses_separate_slots_for_ocr_and_opendataloader(tmp_path):
     )
 
     assert outputs["text"] == "structured"
+    assert structured.keep_line_breaks == [False]
     assert limiter.calls == ["rapidocr", "opendataloader"]

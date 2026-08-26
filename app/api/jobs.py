@@ -30,9 +30,20 @@ async def create_job(
     output_formats: Annotated[str, Form()] = "text,json",
     include_bbox: Annotated[bool, Form()] = True,
     include_images: Annotated[bool, Form()] = False,
+    include_layout: Annotated[bool, Form()] = False,
 ) -> dict:
-    job_id = f"job_{uuid.uuid4().hex}"
     formats = parse_formats(output_formats)
+    if include_layout:
+        # Layout is intentionally synchronous-only. Keeping the field on the
+        # async form gives callers a stable error instead of silently ignoring
+        # it, while preserving the existing Celery message contract during
+        # rolling API/worker deployments.
+        raise LinkParseError(
+            "LAYOUT_ASYNC_UNSUPPORTED",
+            "PDF layout is only available through /v1/parse",
+            422,
+        )
+    job_id = f"job_{uuid.uuid4().hex}"
     path = settings.data_dir / "uploads" / job_id
     path, media_type, filename, size = await save_upload(
         file, path, settings.max_upload_mb * 1024 * 1024

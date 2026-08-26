@@ -14,6 +14,7 @@ def main() -> int:
     parser.add_argument("--table-method", choices=("default", "cluster"), default="default")
     parser.add_argument("--markdown-with-html", action="store_true")
     parser.add_argument("--include-images", action="store_true")
+    parser.add_argument("--keep-line-breaks", action="store_true")
     args = parser.parse_args()
     try:
         import opendataloader_pdf
@@ -26,6 +27,7 @@ def main() -> int:
             markdown_with_html=args.markdown_with_html,
             markdown_page_separator="<!-- ODL_PAGE:%page-number% -->",
             html_page_separator="<!-- ODL_PAGE:%page-number% -->",
+            keep_line_breaks=args.keep_line_breaks,
             image_output="external" if args.include_images else "off",
             image_format="png",
             image_dir=args.image_dir if args.include_images else None,
