@@ -46,7 +46,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .auth-gate { background: var(--surface); display: grid; grid-template-columns: minmax(500px,1.08fr) minmax(480px,.92fr); min-height: 100vh; }
 .auth-story { background: #0b1d38; color: white; display: flex; flex-direction: column; min-height: 100vh; overflow: hidden; padding: 42px clamp(48px,6vw,92px); position: relative; }
 .auth-brand-lockup, .brand { align-items: center; display: flex; gap: 13px; }
-.brand-mark { align-items: center; background: var(--blue); border-radius: 10px; color: white; display: inline-flex; flex: 0 0 auto; font-size: 13px; font-weight: 800; height: 42px; justify-content: center; letter-spacing: -.02em; width: 42px; }
+.brand-mark { align-items: center; display: inline-flex; flex: 0 0 auto; height: 42px; justify-content: center; width: 42px; }
+.brand-mark img { display: block; height: 100%; object-fit: contain; width: 100%; }
 .auth-brand-lockup strong, .auth-brand-lockup small, .brand-copy strong, .brand-copy small { display: block; }
 .auth-brand-lockup strong { font-size: 17px; letter-spacing: -.02em; }
 .auth-brand-lockup small { color: #aab9cf; font-size: 11px; margin-top: 3px; }

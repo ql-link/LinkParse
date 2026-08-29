@@ -13,7 +13,8 @@ client = TestClient(app)
 def test_console_is_available_with_security_headers():
     response = client.get("/")
     assert response.status_code == 200
-    assert "LinkParse · 文档解析控制台" in response.text
+    assert "<title>LinkParse</title>" in response.text
+    assert 'rel="icon" type="image/png" href="/assets/linkparse-logo.png' in response.text
     assert 'class="auth-gate" id="auth-gate"' in response.text
     assert 'class="app-shell hidden" id="app-shell"' in response.text
     assert 'id="auth-dialog"' not in response.text
@@ -39,7 +40,8 @@ def test_console_is_available_with_security_headers():
 def test_custom_api_documentation_replaces_swagger():
     response = client.get("/docs")
     assert response.status_code == 200
-    assert "LinkParse API · 接入文档" in response.text
+    assert "<title>LinkParse</title>" in response.text
+    assert 'rel="icon" type="image/png" href="/assets/linkparse-logo.png' in response.text
     assert 'class="auth-pending"' in response.text
     assert 'src="/assets/clipboard.js' in response.text
     assert "swagger-ui" not in response.text.lower()
@@ -51,6 +53,12 @@ def test_clipboard_helper_has_http_compatible_fallback():
     assert response.status_code == 200
     assert "navigator.clipboard?.writeText" in response.text
     assert 'document.execCommand("copy")' in response.text
+
+
+def test_linkparse_logo_is_served_as_png():
+    response = client.get("/assets/linkparse-logo.png")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
 
 
 def test_markdown_preview_renderer_is_served_locally():
