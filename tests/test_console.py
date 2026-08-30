@@ -15,6 +15,7 @@ def test_console_is_available_with_security_headers():
     assert response.status_code == 200
     assert "<title>LinkParse</title>" in response.text
     assert 'rel="icon" type="image/png" href="/assets/linkparse-logo.png' in response.text
+    assert 'src="/assets/title.js?v=20260830a"' in response.text
     assert 'class="auth-gate" id="auth-gate"' in response.text
     assert 'class="app-shell hidden" id="app-shell"' in response.text
     assert 'id="auth-dialog"' not in response.text
@@ -42,6 +43,7 @@ def test_custom_api_documentation_replaces_swagger():
     assert response.status_code == 200
     assert "<title>LinkParse</title>" in response.text
     assert 'rel="icon" type="image/png" href="/assets/linkparse-logo.png' in response.text
+    assert 'src="/assets/title.js?v=20260830a"' in response.text
     assert 'class="auth-pending"' in response.text
     assert 'src="/assets/clipboard.js' in response.text
     assert "swagger-ui" not in response.text.lower()
@@ -59,6 +61,13 @@ def test_linkparse_logo_is_served_as_png():
     response = client.get("/assets/linkparse-logo.png")
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
+
+
+def test_document_title_is_enforced_at_runtime():
+    response = client.get("/assets/title.js")
+    assert response.status_code == 200
+    assert 'const documentTitle = "LinkParse"' in response.text
+    assert 'window.addEventListener("pageshow", applyDocumentTitle)' in response.text
 
 
 def test_markdown_preview_renderer_is_served_locally():
