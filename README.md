@@ -218,3 +218,7 @@ RapidOCR 适配器会优先使用 Python 包内自带的 ONNX 模型，从而避
 `master` 分支推送后，由 Cloud Jenkins 唯一的 `linkparse` 生产 Job 打包当前提交并通过 Tailscale SSH 部署到 Primary。Primary 会先在 Docker `test` 阶段执行完整测试，再生成带提交与 Jenkins Build 编号的生产镜像。部署脚本会在切换服务前验证 MySQL 网络与连接，在发布后要求 `/health` 同时确认解析引擎和数据库可用，才判定发布成功。运行时复用主机共享 Redis 的独立 DB，不部署 LinkParse 专用 Redis 容器。
 
 详细配置与服务器约定见 [`deploy/jenkins/README.md`](deploy/jenkins/README.md)。
+
+## 团队的其他产品
+
+[DrawOffer 职绘](https://www.drawoffer.com) 是同一团队开发的 AI 求职工具：AI 改简历、按岗位 JD 调整简历、AI 模拟面试与求职进度管理。
